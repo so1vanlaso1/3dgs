@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import os
 import numpy as np
-from typing import TYPE_CHECKING, Callable, Dict, List, Union
+from typing import TYPE_CHECKING, Callable, Dict, List, Literal, Union
 
 import torch
 import torch.nn.functional as F
@@ -179,6 +179,9 @@ def split(
     mask: Tensor,
     revised_opacity: bool = False,
     scene: Scene | None = None,
+    mode: Literal["random", "long_axis"] = "random",
+    split_distance: float = 0.45,
+    opacity_reduction: float = 0.6,
 ):
     """Inplace split the Gaussian with the given mask.
 
@@ -188,27 +191,55 @@ def split(
         mask: A boolean mask to split the Gaussians.
         revised_opacity: Whether to use revised opacity formulation
           from arXiv:2404.06109. Default: False.
+        mode: Random sampling or Long-Axis Split (arXiv:2508.12313).
+        split_distance: Offset as a fraction of the parent's 3-sigma extent.
+          Long-Axis Split shrinks the selected axis by (1-d) and the other
+          axes by sqrt(1-d*d), retaining the parent's rotation and color.
+        opacity_reduction: Multiplier on activated opacity for Long-Axis Split.
     """
+    if mode not in ("random", "long_axis"):
+        raise ValueError(f"Unknown split mode: {mode}")
+    if mode == "long_axis":
+        if revised_opacity:
+            raise ValueError("Long-Axis Split uses its own opacity reduction")
+        if not 0 < split_distance <= 0.5 or not 0 < opacity_reduction < 1:
+            raise ValueError("Require 0 < split_distance <= 0.5 and 0 < opacity_reduction < 1")
     device = mask.device
     sel = torch.where(mask)[0]
     rest = torch.where(~mask)[0]
+    if len(sel) == 0:
+        return
 
     scales = torch.exp(params["scales"][sel])
     quats = F.normalize(params["quats"][sel], dim=-1)
     rotmats = normalized_quat_to_rotmat(quats)  # [N, 3, 3]
-    samples = torch.einsum(
-        "nij,nj,bnj->bni",
-        rotmats,
-        scales,
-        torch.randn(2, len(scales), 3, device=device),
-    )  # [2, N, 3]
+    if mode == "long_axis":
+        longest, axes = scales.max(dim=-1, keepdim=True)
+        local_offsets = torch.zeros_like(scales).scatter(
+            1, axes, 3.0 * split_distance * longest
+        )
+        offsets = torch.einsum("nij,nj->ni", rotmats, local_offsets)
+        samples = torch.stack([offsets, -offsets])
+        child_scales = scales * (1.0 - split_distance**2) ** 0.5
+        child_scales.scatter_(1, axes, longest * (1.0 - split_distance))
+    else:
+        samples = torch.einsum(
+            "nij,nj,bnj->bni",
+            rotmats,
+            scales,
+            torch.randn(2, len(scales), 3, device=device),
+        )  # [2, N, 3]
+        child_scales = scales / 1.6
 
     def param_fn(name: str, p: Tensor) -> Tensor:
         repeats = [2] + [1] * (p.dim() - 1)
         if name == "means":
             p_split = (p[sel] + samples).reshape(-1, 3)  # [2N, 3]
         elif name == "scales":
-            p_split = torch.log(scales / 1.6).repeat(2, 1)  # [2N, 3]
+            p_split = torch.log(child_scales).repeat(2, 1)  # [2N, 3]
+        elif name == "opacities" and mode == "long_axis":
+            new_opacities = torch.sigmoid(p[sel]) * opacity_reduction
+            p_split = torch.logit(new_opacities).repeat(repeats)
         elif name == "opacities" and revised_opacity:
             new_opacities = 1.0 - torch.sqrt(1.0 - torch.sigmoid(p[sel]))
             p_split = torch.logit(new_opacities).repeat(repeats)  # [2N]

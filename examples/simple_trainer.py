@@ -70,7 +70,7 @@ except ModuleNotFoundError as e:
         "    python -m pip install -e ."
     ) from e
 from gsplat.cuda._wrapper import CameraModel
-from gsplat.strategy import DefaultStrategy, MCMCStrategy
+from gsplat.strategy import BudgetStrategy, DefaultStrategy, MCMCStrategy
 from gsplat_viewer import GsplatViewer, GsplatRenderTabState
 from nerfview import CameraState, RenderTabState, apply_float_colormap
 
@@ -180,7 +180,7 @@ class Config:
     far_plane: float = 1e10
 
     # Strategy for GS densification
-    strategy: Union[DefaultStrategy, MCMCStrategy] = field(
+    strategy: Union[DefaultStrategy, MCMCStrategy, BudgetStrategy] = field(
         default_factory=DefaultStrategy
     )
     # Use packed mode for rasterization, this leads to less memory usage but slightly slower.
@@ -511,6 +511,16 @@ class Runner:
         print("Model initialized. Number of GS:", len(self.splats["means"]))
 
         # Densification Strategy
+        if isinstance(self.cfg.strategy, BudgetStrategy):
+            if (
+                self.world_size != 1
+                or self.cfg.with_eval3d
+                or self.cfg.with_ut
+                or self.cfg.antialiased
+            ):
+                raise ValueError(
+                    "BudgetStrategy currently requires single-GPU classic 3DGS rendering"
+                )
         self.cfg.strategy.check_sanity(self.splats, self.optimizers)
 
         if isinstance(self.cfg.strategy, DefaultStrategy):
@@ -954,6 +964,13 @@ class Runner:
                 )
 
             # loss
+            if (
+                isinstance(self.cfg.strategy, BudgetStrategy)
+                and not self._gaussians_frozen
+            ):
+                self.cfg.strategy.observe_image(
+                    self.splats, self.strategy_state, step, info, colors, pixels, masks
+                )
             if masks is not None:
                 # Exclude masked pixels (e.g. ego vehicle) from L1.
                 # For SSIM (patch-based), zero out both sides at masked locations
@@ -1054,6 +1071,9 @@ class Runner:
                     "ellipse_time": time.time() - global_tic,
                     "num_GS": len(self.splats["means"]),
                 }
+                if isinstance(cfg.strategy, BudgetStrategy):
+                    stats["gaussian_budget"] = cfg.strategy.cap_max
+                    stats["growth_history"] = self.strategy_state["growth_history"]
                 print("Step: ", step, stats)
                 with open(
                     f"{self.stats_dir}/train_step{step:04d}_rank{self.world_rank}.json",
@@ -1599,6 +1619,10 @@ if __name__ == "__main__":
                 scale_reg=0.01,
                 strategy=MCMCStrategy(verbose=True),
             ),
+        ),
+        "budget": (
+            "Budgeted growth ranked by gradient and contribution-weighted training error.",
+            Config(strategy=BudgetStrategy(verbose=True)),
         ),
     }
     cfg = tyro.extras.overridable_config_cli(configs)
