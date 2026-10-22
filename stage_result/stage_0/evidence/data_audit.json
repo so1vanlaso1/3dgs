@@ -1,0 +1,118 @@
+{
+  "date_local": "2026-10-10",
+  "scenes": [
+    {
+      "scene": "analytic_spheres_v1",
+      "registered_images": 48,
+      "points": 1280,
+      "splits": {
+        "train": 36,
+        "development": 6,
+        "test": 6
+      },
+      "all_images_decodable": true,
+      "camera_models": [
+        "PINHOLE"
+      ],
+      "image_dimensions": [
+        [
+          128,
+          128
+        ]
+      ],
+      "max_inverse_identity_error": 2.6949200792094274e-16,
+      "max_rotation_orthogonality_error": 1.3322676295501878e-15,
+      "max_rotation_determinant_error": 1.1102230246251565e-15,
+      "scene_scale_normalized": 0.9322467381411038,
+      "all_camera_values_finite": true,
+      "all_point_values_finite": true,
+      "train_sample_shape": [
+        128,
+        128,
+        3
+      ],
+      "dev_sample_shape": [
+        128,
+        128,
+        3
+      ],
+      "train_dev_loading_verified": true,
+      "trainer_default_three_way_split": false,
+      "source_files_sha256": {
+        "cameras.bin": "432b487d4d56303c2eaa9e4c1617cff542021b8c52348249d62a7c97b203fd2b",
+        "frames.bin": "879fe5a1730e75864eb2e6771af801732b2124e04cceb59ee5cc5a6f3518f888",
+        "images.bin": "20bd5bdce9493c16387e478e1d2c218c531af4b637442f20cd9db48c017f7336",
+        "points3D.bin": "376603b35273f22a453c72543d79c7743732fb15af809167d50b76cc8b3f1b02",
+        "rigs.bin": "73e4d5f0da0a84a5711b46ae716a149f1532832f95bb09b4b01e73cf2c5afbe9"
+      },
+      "camera_truth_export_max_error": 1.9984014443252818e-15
+    },
+    {
+      "scene": "room_small",
+      "registered_images": 311,
+      "points": 112627,
+      "splits": {
+        "train": 233,
+        "development": 39,
+        "test": 39
+      },
+      "all_images_decodable": true,
+      "camera_models": [
+        "PINHOLE"
+      ],
+      "image_dimensions": [
+        [
+          389,
+          259
+        ]
+      ],
+      "max_inverse_identity_error": 4.440892098500626e-16,
+      "max_rotation_orthogonality_error": 1.4432899320127035e-15,
+      "max_rotation_determinant_error": 1.3322676295501878e-15,
+      "scene_scale_normalized": 1.3303767496933472,
+      "all_camera_values_finite": true,
+      "all_point_values_finite": true,
+      "train_sample_shape": [
+        259,
+        389,
+        3
+      ],
+      "dev_sample_shape": [
+        259,
+        389,
+        3
+      ],
+      "train_dev_loading_verified": true,
+      "trainer_default_three_way_split": false,
+      "source_files_sha256": {
+        "cameras.bin": "4813b9ecef7e8527120f514cd21c1e905af400b14028e3480b80989309f58406",
+        "frames.bin": "552941e14d0351ac05d99c923b948047ad577a38c6df8990c58b357e21eeed2d",
+        "images.bin": "92833c78b3f0ddc41e7027b573e201f2527b9945a0d693f3e866f4769d6f03c4",
+        "points3D.bin": "13a3ff78bb442e936ce89350e3b4b63878136bbfad3c362bf0b98f19be1f0c69",
+        "rigs.bin": "73e4d5f0da0a84a5711b46ae716a149f1532832f95bb09b4b01e73cf2c5afbe9"
+      }
+    }
+  ],
+  "room_source_check": {
+    "source_manifest": {
+      "source_url": "https://storage.googleapis.com/gresearch/refraw360/360_v2.zip",
+      "scene": "room",
+      "source_image_factor": 8,
+      "images": 311,
+      "points": 112627,
+      "image_dimensions": {
+        "1": [
+          389,
+          259
+        ]
+      },
+      "compressed_dataset_bytes": 58463117,
+      "archive_bytes": 12535427936,
+      "preparation": "Official images_8; camera intrinsics rescaled to actual dimensions; all poses and points preserved. Use data_factor=1."
+    },
+    "prepared_poses_max_difference_from_source": 0.0,
+    "prepared_points_max_difference_from_source": 0.0,
+    "rescaled_intrinsics_max_difference": 0.0,
+    "source_provenance": "local official-download record and source/prepared equivalence; no fresh archive CRC download in Stage 0"
+  }
+}

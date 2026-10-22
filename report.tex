@@ -1,0 +1,657 @@
+\documentclass[10pt]{article}
+
+\usepackage[margin=0.82in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xurl}
+\usepackage[colorlinks=true,allcolors=blue]{hyperref}
+
+\setlength{\parskip}{0.35em}
+\setlength{\parindent}{0pt}
+\setlist{nosep,leftmargin=*}
+\renewcommand{\arraystretch}{1.12}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\method}{\textsc{CCD-GS}}
+\newcommand{\pending}{\textit{Pending measurement}}
+
+\title{\textbf{Do Temporary Pose Probes Predict Useful Gaussian Splits?}\\
+       \large A Split-Utility Study for 3D Gaussian Splatting}
+\author{\textit{Author information to be added}}
+\date{Working draft --- 10 October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+\fbox{\parbox{0.94\linewidth}{
+\textbf{Draft status.} This manuscript records a completed Stage 0 research
+specification and data-preparation audit. No \method{} training, pose-probe,
+split-utility, end-to-end allocation, or external-baseline experiment has been
+run. All method benefits and empirical conclusions are therefore unestablished.
+The Results and Discussion sections record this evidence boundary rather than
+inventing outcomes.
+}}
+\end{center}
+
+\begin{abstract}
+Adaptive density control in 3D Gaussian Splatting (3DGS) uses image-space
+optimization signals to decide where the representation should grow. Such
+signals can also change when camera poses are refined, so a large growth
+gradient need not uniquely indicate that an additional Gaussian will improve
+the reconstruction. We specify a controlled study of whether a bounded,
+temporary intervention on camera extrinsics provides information about the
+subsequent utility of splitting an eligible Gaussian. The intervention fits a
+copied camera while holding the current scene values fixed, measures the same
+screen-space growth signal before and after the fit, and discards the temporary
+correction. Its predictive value is to be tested with matched split/no-split
+training branches and compared with original-gradient, corrected-gradient,
+retained-correction, and equal-computation pose-refinement controls. The study
+prioritizes reconstruction quality versus Gaussian count and separately
+accounts for training time, probe overhead, memory, and camera error. We have
+prepared a known-camera synthetic fixture and an official low-resolution
+Mip-NeRF 360 room scene with explicit training, development, and reserved-test
+view manifests. These preparation checks do not constitute model experiments.
+No conclusion about split prediction, compactness, speed, or novelty is claimed
+in this draft.
+\end{abstract}
+
+\textbf{Keywords:} 3D Gaussian Splatting, density control, camera pose
+refinement, split utility, representation allocation
+
+\section{Introduction}
+
+3D Gaussian Splatting represents a scene with explicit anisotropic Gaussian
+primitives and renders them through a differentiable rasterization pipeline
+\cite{kerbl2023}. Its adaptive density-control procedure can clone or split
+primitives as training proceeds. These operations determine where model
+capacity is added and affect the final primitive population. A split can
+improve a region that the current representation cannot fit, but the
+optimization signal used to nominate a candidate is not itself a measurement
+of the benefit that the split will produce.
+
+One source of ambiguity is camera pose. A change in extrinsics alters
+projected Gaussian means, visibility, and image loss. Consequently, the
+screen-space gradient of an eligible Gaussian may respond to pose refinement
+even though its scene parameters have not changed. This response is
+potentially useful when deciding where to allocate more primitives, but it has
+several alternative explanations. A camera update can compensate for incorrect
+geometry; it can change occlusion; and a gradient that persists after pose
+refinement can still be resolved by optimizing existing Gaussians rather than
+adding capacity. A gradient decrease alone therefore does not show that a
+split was unnecessary.
+
+This paper asks a narrower question:
+
+\begin{quote}
+\textbf{Does a bounded, temporary pose intervention identify useful Gaussian
+splits better than original or corrected gradients, and does that information
+remain useful after accounting for equivalent permanent camera refinement?}
+\end{quote}
+
+We use \method{} as a project name for the proposed investigation. At a
+training checkpoint, the diagnostic copies one training camera, holds all
+Gaussian values fixed, fits a bounded extrinsic correction using that training
+image, measures a candidate's normalized screen-space growth signal again,
+and discards the correction. The measurements are treated as diagnostic
+features, not as proof of calibration error or as split-utility labels. The
+central mechanism test instead restores identical training states into
+matched branches, applies a split in one branch, omits it in the other, and
+compares their subsequent development-view losses.
+
+The investigation has three hypotheses:
+\begin{enumerate}[label=\textbf{H\arabic*:},leftmargin=2.1em]
+  \item \textbf{Diagnostic information.} A bounded pose probe changes
+  candidate rankings reproducibly beyond zero-update and branch-replay
+  variation.
+  \item \textbf{Split usefulness.} A response-based feature predicts
+  development split utility better than the original gradient and corrected
+  gradient magnitude alone, after accounting for candidate attributes and
+  visibility.
+  \item \textbf{Allocation value.} An allocation policy selected from that
+  evidence improves quality versus representation size beyond ordinary pose
+  refinement and strong allocation controls, with the complete probe cost
+  included.
+\end{enumerate}
+H1 alone would support a sensitivity diagnostic, not an allocation method.
+H2 is required for the proposed predictive mechanism. H3 is required for a
+practical reconstruction claim.
+
+The present draft makes no unconditional contribution claim. If supported by
+later experiments, the paper may contribute (i) a reproducible measurement of
+growth-signal response to a constrained, state-isolated pose intervention,
+(ii) direct branch-based evidence about whether that response predicts split
+utility, and (iii) an allocation rule whose quality/count trade-off survives
+calibration and growth controls. Each item remains \pending{}.
+
+\section{Related Work}
+
+\subsection{Densification and representation allocation}
+
+The original 3DGS method uses an adaptive density-control policy to manage
+primitive growth and pruning \cite{kerbl2023}. Revising Densification replaces
+parts of this logic with a pixel-error-driven criterion and adds explicit
+population-control mechanisms \cite{rota2024}. FastGS uses sampled training
+views to score high-error pixels within projected Gaussian footprints, guiding
+multi-view-consistent densification and pruning \cite{ren2025fastgs}. These
+methods establish that image-error attribution and multi-view evidence are
+already central to density control.
+
+Several recent methods further narrow any broad novelty claim about
+importance-based or predictive allocation. SalientGS aggregates multi-view
+residual evidence into underfit and redundancy signals and uses them to guide
+MCMC-based Gaussian allocation in a unified SfM-to-3DGS pipeline
+\cite{xiong2026salientgs}. BlitzGS version 2 includes a learned
+spawn-survival gate in addition to scheduled population simplification and
+workload controls \cite{wang2026blitzgs}. LeGS learns density-control actions
+from sampled-view gradient and sensitivity information
+\cite{ning2026legs}. Thus, the present question is not whether prediction,
+multi-view scoring, or learned allocation can be used in 3DGS. The proposed
+distinction is whether the response of an eligible split candidate to a
+temporary, bounded extrinsic-pose fit adds information about its subsequent
+split utility beyond simpler signals and permanent pose refinement.
+
+\subsection{Pose refinement and nuisance-aware density control}
+
+Energy-GS jointly optimizes scene parameters and camera poses and redesigns
+pose-gradient flow with an image-energy-guided alignment procedure
+\cite{gao2026energygs}. It is a particularly relevant challenge to a
+counterfactual allocation claim: any apparent benefit must be separated from
+the benefit of spending more computation on ordinary calibration or changing
+the timing of densification.
+
+Other methods address pose or cross-view effects in different observation
+settings. BSGS refines camera poses and controls densification for
+camera-motion-deblurred images \cite{zhao2025bsgs}. HarmoGS addresses
+cross-view gradient conflict in in-the-wild reconstruction and includes
+conflict-aware density control \cite{kang2026harmogs}. These works make
+pose-related and view-related explanations important controls and failure
+cases. Their data assumptions differ from the static, sharp-image setting
+specified here.
+
+\subsection{Proposed distinction and its limits}
+
+The targeted review recorded in the Stage 0 artifacts found substantial
+overlap in error-driven, multi-view, conflict-aware, learned, and
+pose-refinement-based allocation. In the inspected versions, the closest
+unresolved question is whether the *change* in a candidate's growth signal
+under a small, discarded extrinsic-pose fit predicts its later split benefit,
+after accounting for original gradient, corrected magnitude, visibility, and
+equivalent permanent pose refinement. The proposed evidence is the conjunction
+of isolated intervention measurements, matched split/no-split utility,
+and strong calibration controls. This targeted review does not establish
+exhaustive novelty. Direct prior art, or a result fully explained by corrected
+magnitude or retained pose corrections, would require revising the framing.
+
+Version and reproduction details matter. The local Stage 0 audit checked
+version-pinned papers and author-linked repositories on 10 October 2026.
+FastGS, SalientGS, BlitzGS, and LeGS have linked source repositories in the
+recorded audit. The inspected public default branches for Energy-GS and BSGS
+contained README/license files but no implementation suitable for reproduction;
+the audit did not identify a runnable HarmoGS repository. These are dated
+availability observations, not permanent claims. No external method has been
+installed or reproduced for this draft.
+
+\section{Problem Formulation}
+
+Let \(G_t\) denote the Gaussian scene at training step \(t\), \(T_v\) the
+camera-to-world transform for training view \(v\), \(K_v\) its fixed
+intrinsics, and \(I_v\) its RGB image. Let
+\(\mathcal{L}_{\mathrm{photo}}(G,T,K;I)\) be a fixed photometric objective
+computed by the shared renderer. The initial study uses
+\[
+\mathcal{L}_{\mathrm{photo}}
+ = 0.8\,\mathcal{L}_{1}
+ + 0.2\,(1-\mathrm{SSIM}),
+\]
+with exact image reduction and SSIM implementation to be recorded with the
+training configuration.
+
+For a Gaussian \(i\) eligible for splitting under the common density-control
+policy, let \(\boldsymbol{\mu}^{2D}_{iv}\) denote its projected mean in view
+\(v\). We use \(g_0(i,v,t)\) and \(g_+(i,v,t)\) for its normalized screen-space
+growth-gradient magnitude before and after the temporary pose fit. Under the
+repository's DefaultStrategy convention, the two projected-mean gradient
+components are scaled by image size and camera count before taking their
+norm:
+\[
+\begin{aligned}
+q_x &= \frac{W}{2}\,n_{\mathrm{cam}}\,
+       \frac{\partial\mathcal{L}_{\mathrm{photo}}}
+            {\partial \mu^{2D}_{iv,x}},\\
+q_y &= \frac{H}{2}\,n_{\mathrm{cam}}\,
+       \frac{\partial\mathcal{L}_{\mathrm{photo}}}
+            {\partial \mu^{2D}_{iv,y}},\\
+g(i,v,t) &= \sqrt{q_x^2+q_y^2}.
+\end{aligned}
+\]
+The before/after measurement must use the same image, loss, resolution,
+rasterizer flags, Gaussian values, and normalization. A single-view probe
+measurement is reported as such; it is not silently equated with the
+strategy's accumulated multi-view average.
+
+\section{Proposed Diagnostic}
+
+\subsection{Bounded, state-isolated pose fit}
+
+The intervention operates on an independent copy of a camera. It does not
+update Gaussian values, the training camera embedding, optimizer moments,
+density-control accumulators, or the main view-sampling sequence. The initial
+pose convention is right composition:
+\[
+T_v^{+}=T_v\Delta_v,\qquad \Delta_v\in\mathrm{SE}(3).
+\]
+The pose fit minimizes
+\[
+\begin{split}
+\mathcal{L}_{\mathrm{probe}}(\Delta_v)
+={}&\mathcal{L}_{\mathrm{photo}}
+  (G_t,T_v\Delta_v,K_v;I_v)\\
+ &+\lambda_{\mathrm{pose}}\left[
+   \left(\frac{\theta(\Delta_v)}{\theta_{\max}}\right)^2
+   +\left(
+   \frac{\|c(T_v\Delta_v)-c(T_v)\|_2}
+        {s_{\mathrm{scene}}\rho_{\max}}
+   \right)^2
+  \right],
+\end{split}
+\]
+where \(\theta\) is the relative rotation angle, \(c(\cdot)\) is camera center,
+and \(s_{\mathrm{scene}}\) is the recorded scene scale. The initial development
+setting is five Adam pose-only updates, \(\theta_{\max}=1^\circ\),
+\(\rho_{\max}=0.005\), and \(\lambda_{\mathrm{pose}}=0.001\). These are
+prospective settings, not empirically selected optima. The bounds apply to
+total displacement from the starting camera, not to each update. Any
+parameterization or clipping procedure must be logged, and realized camera
+motion must be measured in rotation angle and scene-normalized center
+displacement.
+
+After fitting the copied pose, the diagnostic recomputes the screen-space
+gradient using the photometric term alone. This keeps the before/after
+quantities in the same units and prevents the pose prior from directly
+changing the gradient comparison. Probe state is discarded. A zero-update
+probe and repeated fixed-sample measurements establish the numerical and
+replay floor before candidate-ranking changes are interpreted.
+
+\subsection{Candidate validity and score selection}
+
+For every candidate observation, the planned log records candidate identity
+and lineage, checkpoint, view, \(g_0\), \(g_+\), photometric loss change,
+camera displacement, projected radius, opacity, observation count, and
+visibility before and after the intervention. Finite, in-bounds measurements
+with stable contribution are analyzed as reliable observations. Disappearing
+or newly appearing candidates, large footprint changes, and other visibility
+changes are flagged rather than interpreted as calibration-resolved error.
+An invalid observation is not negative evidence against splitting; the initial
+fallback is the original growth signal, with later reconsideration.
+
+The pilot compares the following rankings:
+\begin{center}
+\small
+\begin{tabularx}{0.96\linewidth}{@{}lY@{}}
+\toprule
+\textbf{Feature} & \textbf{Question tested}\\
+\midrule
+Original magnitude \(g_0\) & Does the ordinary growth signal already rank useful splits?\\
+Corrected magnitude \(g_+\) & Is one post-correction measurement sufficient?\\
+Persistence ratio \(g_+/(g_0+\epsilon)\) & Does relative response add information, despite instability for weak \(g_0\)?\\
+Magnitude-aware response \(g_0\min(g_+/(g_0+\epsilon),1)\) & Does combining original magnitude and response help beyond \(g_+\)?\\
+Declared model of \(g_0\), \(g_+\), and their difference & Does retaining both measurements add predictive information on held-out candidate batches?\\
+Matched random ranking & Does the result exceed suppression with similar gradient, scale, opacity, and visibility statistics?\\
+\bottomrule
+\end{tabularx}
+\end{center}
+No final score is frozen at this stage. In particular, the ratio alone is not
+treated as a reliable score, and the magnitude-aware example is not claimed as
+novel. Stage 3 selects the simplest feature that predicts split utility on
+development data; any fitted feature rule is evaluated on candidate batches
+or checkpoints not used to fit it.
+
+\section{Experimental Protocol}
+
+\subsection{Scenes and view roles}
+
+Stage 0 prepared two development fixtures and explicit view manifests. The
+analytic synthetic scene has known camera truth. The real scene is the
+official Mip-NeRF 360 \emph{room} capture, prepared at its low-resolution
+images and point-cloud setting \cite{barron2022mipnerf360}.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}l l r l Y@{}}
+\toprule
+\textbf{Scene} & \textbf{Resolution} & \textbf{Points} &
+\textbf{Views (train/dev/test)} & \textbf{Role}\\
+\midrule
+analytic\_spheres\_v1 & \(128\times128\) & 1,280 & 48 (36/6/6) &
+Known-camera synthetic development fixture\\
+room\_small & \(389\times259\) & 112,627 & 311 (233/39/39) &
+Official Mip-NeRF 360 room; previously exposed development scene\\
+\bottomrule
+\end{tabularx}
+\caption{Stage 0 data inventory and prospective three-way view counts.}
+\label{tab:data}
+\end{table}
+
+For both scenes, view identity, parser index, role, dimensions, and hashes are
+recorded in manifests. Training images are used for scene/camera optimization
+and probe fitting. Development images are used for score selection and
+split-utility branches; probe fitting does not use them in the primary
+evaluation. Reserved views are excluded from score and parameter selection.
+For reproducibility, if \(i\) is the zero-based lexicographic parser index,
+reserved test views satisfy \(i\bmod 8=0\), development views satisfy
+\(i\bmod 8=4\), and training views satisfy
+\(i\bmod 8\in\{1,2,3,5,6,7\}\).
+The room's held-out views have been evaluated in earlier project runs, so the
+room is a development fixture rather than untouched final generalization
+evidence. Later final evaluation requires fresh scenes and views. The
+provided COLMAP initialization may also have used the full capture; all
+methods in the initial isolation study share that initialization, and a
+strict training-only SfM reconstruction would be a separate setting.
+
+The Stage 0 parser audit verified image decoding, finite camera/point values,
+camera-transform consistency, and disjoint manifest roles. Re-running the
+analytic-fixture generator reproduced 60 prepared files byte-for-byte. These
+are data and artifact checks, not training-quality or method results.
+
+\subsection{Pose perturbations and candidate sampling}
+
+The synthetic scene supports clean-camera evaluation against known pose
+metadata. The development plan also includes clean, mild, and moderate
+training-pose perturbations. Proposed mild disturbances are at most
+\(0.5^\circ\) and \(0.0025\) scene scales; proposed moderate disturbances are
+at most \(2^\circ\) and \(0.01\) scene scales. Perturbations are sampled with
+fixed seeds and applied to training cameras only. Development and reserved
+camera poses remain fixed. These are controlled stress settings, not claims
+about typical real-world pose errors.
+
+For the split-utility pilot, the initial plan samples 24 candidates at each of
+three checkpoints (25\%, 50\%, and 75\% of the active split window), subject
+to measured branch cost. Sampling spans original gradient, scale, opacity,
+and observation count; pose-sensitive and persistent candidates are matched
+approximately on these attributes. Candidate identities are fixed before
+branch outcomes are observed. The initial end-to-end horizons are 3,000 steps
+for the analytic fixture and 7,000 for room, with seeds 0, 1, and 2 for
+decisive pilot comparisons. Feasibility changes must be recorded before
+examining favorable outcomes.
+
+\subsection{Matched split utility}
+
+For each candidate, two branches are restored from the same complete training
+snapshot. One branch applies a fixed split to the selected parent; the other
+omits it. Other structural changes are held fixed or disabled in both branches
+for this short diagnostic. Both branches continue for the same sampled views,
+steps, camera policy, optimizer schedule, and state-expansion rule. A
+development view set excluded from probe fitting measures utility:
+\[
+U_i^{(h)}
+=
+\mathcal{L}_{\mathrm{dev}}(G_{\mathrm{no\ split}}^{(h)})
+-
+\mathcal{L}_{\mathrm{dev}}(G_{\mathrm{split}\ i}^{(h)}),
+\]
+where \(h\) is the continuation horizon. Positive \(U_i^{(h)}\) means that
+the split branch has lower development loss after the specified continuation.
+The initial short horizon is 200 steps, with a prespecified subset continued
+for 1,000 steps to assess horizon sensitivity. Grouped splits, if needed for
+cost, receive group-level utility labels rather than labels attributed to each
+member.
+
+The pilot reports rank correlation, top-quartile utility, complete utility
+distributions, invalid-observation rates, and results stratified by relevant
+candidate attributes. For 24 candidates, the primary top-quartile size is
+\(k=6\). The planned normalized top-\(k\) comparison is
+\[
+D =
+\frac{
+  \operatorname{mean}(U_{\mathrm{top}\text{-}k,\mathrm{probe}})
+  -\operatorname{mean}(U_{\mathrm{top}\text{-}k,\mathrm{comparator}})
+}{
+  \operatorname{mean}(\mathcal{L}_{\mathrm{dev,no\ split}})
+}.
+\]
+The prospective pilot signal criterion is \(D\geq0.005\), with the raw
+utility difference also exceeding five times the 95th-percentile absolute
+no-intervention branch-loss difference measured on matched replays. A
+directional advantage over both \(g_0\) and \(g_+\) is required at two
+checkpoints, with a second-fixture check and no systematic long-horizon
+reversal. This is a development decision rule, not a significance test or a
+claim of statistical power.
+
+\subsection{State control and replay}
+
+Reliable branch comparisons require snapshots beyond a scene-only checkpoint.
+The planned snapshot contains Gaussian tensors, actual camera state, optimizer
+and scheduler states, density-control accumulators, training step, candidate
+identities, Python/NumPy/PyTorch CPU and CUDA random-number states, and the
+subsequent view-sampling sequence. Appearance state is included if enabled.
+Two no-intervention continuations from one snapshot establish replay
+agreement within a documented numerical tolerance. The current trainer's
+scene checkpoint does not provide this full-state replay and its checkpoint
+path is evaluation-only; Stage 1 must add a separate snapshot/restore path
+before split effects are measured.
+
+\subsection{Comparisons and resource accounting}
+
+The primary practical comparison is ordinary density control with the same
+real camera-pose optimizer. The method must also face controls that isolate
+extra calibration work, use of the corrected pose, simpler scores, and mere
+growth reduction.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}lY@{}}
+\toprule
+\textbf{Comparison} & \textbf{Alternative explanation tested}\\
+\midrule
+Ordinary density control & Reference training policy\\
+Ordinary density control plus pose refinement & Whether pose optimization alone explains a gain\\
+Equal-computation pose-only updates & Whether additional calibration compute explains a gain\\
+Retain the probe correction and densify normally & Whether accepting the correction is sufficient\\
+Corrected-gradient magnitude \(g_+\) & Whether the before/after response adds value beyond \(g_+\)\\
+Multi-view scoring without the pose probe & Whether view consistency explains the allocation\\
+Delayed densification & Whether waiting for a more mature scene is sufficient\\
+Higher threshold or matched random suppression & Whether simply reducing growth explains the result\\
+FastGS and other selected external methods & Whether the result survives the closest available published allocation baselines\\
+\bottomrule
+\end{tabularx}
+\caption{Essential internal controls and external-baseline priorities.}
+\label{tab:controls}
+\end{table}
+
+Quality versus Gaussian count is the primary end-to-end outcome. At a declared
+development operating point, the prospective comparable-quality margins are
+\[
+\Delta\mathrm{PSNR}\geq-0.20\ \mathrm{dB},\qquad
+\Delta\mathrm{SSIM}\geq-0.005,\qquad
+\Delta\mathrm{LPIPS}\leq+0.010.
+\]
+The initial compactness aspiration is no more than 80\% of the reference
+final Gaussian count at comparable quality. These values were fixed before
+CCD-GS experiments; they are aspirations, not predicted benefits or
+publication thresholds. The method must be compared to pose-enabled ordinary
+training and to retained-correction/equal-computation controls, not only to
+vanilla fixed-pose training.
+
+For every run, report per-scene PSNR, SSIM, and LPIPS; final and peak Gaussian
+counts; model size; peak VRAM; total wall-clock time; probe rendering,
+backpropagation, scoring, and allocation overhead; and pose error where
+reference poses exist. Fixed-budget and fixed-total-time comparisons are
+separate: a fixed number of steps does not guarantee equal computation.
+Rendering speed, if studied, requires its own synchronized fixed-hardware
+benchmark. Primitive count alone is not rendering-speed evidence.
+
+The later frozen campaign targets at least six fresh scenes across two
+dataset families, including known-camera synthetic scenes and ordinary real
+reconstructions. FastGS is the first external allocation baseline to
+investigate. Protocol-compatible reproduction, hardware/software, renderer
+changes, and unavailable or ported methods must be described explicitly.
+
+\section{Current Evidence and Results Status}
+
+Stage 0 completed the question, scope, targeted related-work review, data
+preparation, view manifests, and prospective decision criteria on 10 October
+2026. It did not execute baseline training, pose-probe optimization,
+split/no-split branches, integrated allocation, external method reproduction,
+or final test scoring.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}l l Y@{}}
+\toprule
+\textbf{Claim under test} & \textbf{Status} & \textbf{Required evidence}\\
+\midrule
+Probe changes rankings reproducibly (H1) & Not measured &
+Repeated fixed-state probes, zero-update control, replay and visibility analysis\\
+Response predicts split utility (H2) & Not measured &
+Matched split/no-split branches; comparison with \(g_0\), \(g_+\), and matched random rankings\\
+Allocation improves quality/count (H3) & Not measured &
+Multi-budget curves and strong pose/growth controls across fresh scenes\\
+Training-time improvement & Not measured &
+Equal-total-time accounting that includes all probe costs\\
+Rendering-time improvement & Not measured &
+Independent synchronized rendering benchmark\\
+Camera-pose improvement & Not measured &
+Known-pose evaluation under a fixed gauge policy\\
+\bottomrule
+\end{tabularx}
+\caption{Evidence ledger at the time of this draft.}
+\label{tab:evidence}
+\end{table}
+
+The completed data checks establish that the selected development fixtures
+and view-role manifests can be inspected and loaded through the parser. They
+do not establish that the baseline trains under the prospective three-way
+split, that matched snapshots replay reliably, or that any probe signal
+predicts useful growth. No CCD-GS numerical result is reported.
+
+\section{Discussion}
+
+The proposed mechanism is deliberately falsifiable. If pose-probe rankings
+are not reproducible beyond replay and numerical variation, H1 fails. If
+corrected-gradient magnitude predicts utility equally well, a more complicated
+before/after score is not justified. If retaining probe corrections or
+spending the same time on ordinary pose updates matches the result, the
+evidence would support calibration or scheduling effects rather than a
+counterfactual allocation advantage. If the score predicts split utility but
+does not improve end-to-end quality/count trade-offs, the paper should remain
+a diagnostic study. A reliable negative result is also reportable.
+
+Several failure modes need explicit analysis. Pose-scene ambiguity can make
+camera movement hide geometric error. Visibility changes can alter a gradient
+without resolving the scene. Persistent residuals may indicate that existing
+Gaussians are under-optimized rather than that the representation needs more
+capacity. A temporary correction that is discarded may not be reached by the
+ordinary optimizer. Finally, permanently suppressing candidates can starve
+regions while the scene is immature. These risks motivate copied probe state,
+visibility logging, invalid-observation fallback, later reconsideration, and
+the retained-correction control.
+
+This draft also has limits before any method results exist. The literature
+review is targeted rather than exhaustive. The synthetic fixture is small and
+analytic. The room scene is previously exposed development data and cannot
+serve as untouched generalization evidence. Its supplied camera/point-cloud
+initialization may reflect the full capture. Split utility depends on the
+chosen continuation horizon and candidate interactions. The planned early
+pilot can reject an implausible mechanism, but it cannot replace a frozen
+multi-scene campaign with repeated runs and fresh final views.
+
+\section{Conclusion}
+
+We have specified a study of whether a bounded, temporary camera-extrinsic
+intervention helps predict the utility of Gaussian splits. Its central test is
+not whether gradients change after a pose fit, but whether that change
+predicts held-out development split utility and improves quality/count
+allocation beyond ordinary pose refinement and equal-computation controls.
+Stage 0 prepared development data and recorded prospective decision rules;
+it produced no method-performance evidence. The question therefore remains
+open, and the final paper claims must follow the results of the planned
+experiments.
+
+\section*{Acknowledgments}
+
+\textit{To be completed.}
+
+\begin{thebibliography}{99}
+\small
+
+\bibitem{kerbl2023}
+B. Kerbl, G. Kopanas, T. Leimk\"uhler, and G. Drettakis.
+\newblock 3D Gaussian Splatting for Real-Time Radiance Field Rendering.
+\newblock \emph{ACM Transactions on Graphics}, 42(4), 2023.
+\newblock \url{https://arxiv.org/abs/2308.04079}.
+
+\bibitem{rota2024}
+S. Rota Bul\`o, L. Porzi, and P. Kontschieder.
+\newblock Revising Densification in Gaussian Splatting.
+\newblock In \emph{European Conference on Computer Vision (ECCV)}, 2024.
+\newblock \url{https://arxiv.org/abs/2404.06109}.
+
+\bibitem{ren2025fastgs}
+S. Ren, T. Wen, Y. Fang, and B. Lu.
+\newblock FastGS: Training 3D Gaussian Splatting in 100 Seconds.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition (CVPR)}, 2026. arXiv:2511.04283, version 3.
+\newblock \url{https://arxiv.org/abs/2511.04283}.
+
+\bibitem{xiong2026salientgs}
+T. Xiong, R. Li, S. Ge, and J. Yang.
+\newblock SalientGS: Unified SfM-to-3DGS with Importance-Guided MCMC Gaussian
+Allocation.
+\newblock In \emph{Proceedings of the ACM International Conference on
+Multimedia}, 2026. arXiv:2607.11285, version 2.
+\newblock \url{https://arxiv.org/abs/2607.11285}.
+
+\bibitem{gao2026energygs}
+Y. Gao, L. Su, R. Huang, T. Jiang, J. Tang, Y. Yue, and Y. Yang.
+\newblock Energy-GS: Image Energy-guided Pose Alignment Gaussian Splatting
+with redesigned pose gradient flow.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition (CVPR)}, pages 7310--7319, 2026.
+\newblock \url{https://openaccess.thecvf.com/content/CVPR2026/html/Gao_Energy-GS_Image_Energy-guided_Pose_Alignment_Gaussian_Splatting_with_redesigned_pose_CVPR_2026_paper.html}.
+
+\bibitem{zhao2025bsgs}
+A. Zhao, P. Yu, Z. Zhu, and M. Wei.
+\newblock BSGS: Bi-stage 3D Gaussian Splatting for Camera Motion Deblurring.
+\newblock In \emph{Proceedings of the ACM International Conference on
+Multimedia}, 2025. arXiv:2510.12493, version 2.
+\newblock \url{https://arxiv.org/abs/2510.12493}.
+
+\bibitem{kang2026harmogs}
+Y. Kang, T. Zhu, J.-F. Hu, J. Lai, and W.-S. Zheng.
+\newblock HarmoGS: Robust 3D Gaussian Splatting in the Wild via
+Conflict-Aware Gradient Harmonization.
+\newblock arXiv:2605.13073, version 2, 2026.
+\newblock \url{https://arxiv.org/abs/2605.13073}.
+
+\bibitem{wang2026blitzgs}
+Z. Wang, H. Au, Y. Li, M. Su, H. Jin, Y. Chen, M. Gai, F. Zhu, and G. Wang.
+\newblock BlitzGS: City-Scale Gaussian Splatting at Lightning Speed.
+\newblock arXiv:2605.13794, version 2, 2026.
+\newblock \url{https://arxiv.org/abs/2605.13794}.
+
+\bibitem{ning2026legs}
+Z. Ning, X. Li, J. Yu, G. Lu, Y. Wang, and W. Pei.
+\newblock Beyond Heuristics: Learnable Density Control for 3D Gaussian
+Splatting.
+\newblock arXiv:2605.00408, version 2, 2026.
+\newblock \url{https://arxiv.org/abs/2605.00408}.
+
+\bibitem{barron2022mipnerf360}
+J. T. Barron, B. Mildenhall, D. Verbin, P. P. Srinivasan, and P. Hedman.
+\newblock Mip-NeRF 360: Unbounded Anti-Aliased Neural Radiance Fields.
+\newblock In \emph{Proceedings of the IEEE/CVF Conference on Computer Vision
+and Pattern Recognition (CVPR)}, 2022.
+\newblock \url{https://jonbarron.info/mipnerf360/}.
+
+\end{thebibliography}
+\end{document}

@@ -1,0 +1,9 @@
+{
+  "url": "https://openaccess.thecvf.com/content/CVPR2026/papers/Gao_Energy-GS_Image_Energy-guided_Pose_Alignment_Gaussian_Splatting_with_redesigned_pose_CVPR_2026_paper.pdf",
+  "status": 200,
+  "pdf_sha256": "77d3b0e2989dc4d1a6b66fa9cf9758ebdec665db72efe2dc92e05d4a77862adf",
+  "pages": 10,
+  "parser_wheel": "pypdf-6.20.0-py3-none-any.whl",
+  "parser_wheel_sha256": "f003fc2014814d264fe7dd3f9d435c158e23e1a85a2233f87a0a2d6d21c914ad",
+  "date_local": "2026-10-10"
+}

@@ -1,0 +1,44 @@
+{
+  "date_local": "2026-10-10",
+  "timezone": "Asia/Saigon",
+  "status": "passed",
+  "checks": [
+    {
+      "check": "markdown_local_links_and_utf8",
+      "passed": true,
+      "documents": 10
+    },
+    {
+      "check": "analytic_spheres_v1_identity_partition_and_pixel_hashes",
+      "passed": true,
+      "views": 48
+    },
+    {
+      "check": "room_small_identity_partition_and_pixel_hashes",
+      "passed": true,
+      "views": 311
+    },
+    {
+      "check": "recorded_camera_truth_and_room_source_equivalence",
+      "passed": true
+    },
+    {
+      "check": "named_source_coverage_and_recorded_release_inventory",
+      "passed": true
+    },
+    {
+      "check": "machine_readable_primary_comparison_and_claim_status",
+      "passed": true
+    }
+  ],
+  "markdown_word_count": 10699,
+  "scope": "artifact integrity and recorded data checks; no model training or external reproduction",
+  "fixture_reproducibility": {
+    "date_local": "2026-10-10",
+    "files_compared": 60,
+    "all_fixture_files_identical": true,
+    "differing_paths": [],
+    "scope": "byte-for-byte analytic images, camera truth, COLMAP models, and dataset manifest after rerunning identical generator",
+    "preparation_stdout": "[Parser] 48 images, taken by 1 cameras.\n[Parser] 311 images, taken by 1 cameras.\n{\n  \"analytic_spheres_v1\": {\n    \"train\": 36,\n    \"development\": 6,\n    \"test\": 6\n  },\n  \"room_small\": {\n    \"train\": 233,\n    \"development\": 39,\n    \"test\": 39\n  }\n}"
+  }
+}
