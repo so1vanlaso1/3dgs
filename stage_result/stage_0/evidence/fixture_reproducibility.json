@@ -1,0 +1,8 @@
+{
+  "date_local": "2026-10-10",
+  "files_compared": 60,
+  "all_fixture_files_identical": true,
+  "differing_paths": [],
+  "scope": "byte-for-byte analytic images, camera truth, COLMAP models, and dataset manifest after rerunning identical generator",
+  "preparation_stdout": "[Parser] 48 images, taken by 1 cameras.\n[Parser] 311 images, taken by 1 cameras.\n{\n  \"analytic_spheres_v1\": {\n    \"train\": 36,\n    \"development\": 6,\n    \"test\": 6\n  },\n  \"room_small\": {\n    \"train\": 233,\n    \"development\": 39,\n    \"test\": 39\n  }\n}"
+}

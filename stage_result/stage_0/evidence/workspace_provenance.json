@@ -1,0 +1,37 @@
+{
+  "date_local": "2026-10-10",
+  "timezone": "Asia/Saigon",
+  "revision": "3a655ff4fa7673a2c98060198c45f2897bb39f3e",
+  "initial_status_observed_before_stage0_writes": [
+    "A  docs/direction.md",
+    "?? docs/final.md",
+    "?? docs/other_direction.md",
+    "?? docs/stage.md"
+  ],
+  "current_status_after_stage0_writes": [
+    "A  docs/direction.md",
+    "?? docs/final.md",
+    "?? docs/other_direction.md",
+    "?? docs/stage.md",
+    "?? stage_result/"
+  ],
+  "python_version": "3.12.10",
+  "python_executable": "D:\\gsplat\\gsplat\\.venv\\Scripts\\python.exe",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "gpu_read_only_query": "NVIDIA GeForce GTX 1660 SUPER, 6144 MiB, 591.86",
+  "input_sha256": {
+    "docs/stage.md": "a90e8bb1fcdbf4b030e36625b16e853ac4d18c4f2fcacec5ab944af7c1ad729b",
+    "docs/final.md": "c194c100c1db1f28c32730a2cd5b96321ef118c9be0e763287a0f0bdcb0a21d6",
+    "docs/other_direction.md": "fb758687d4a6d4d0a1bed740a51b9a2dcbadc09dd07e8460547cfb80e720bd37",
+    "docs/direction.md": "6e3831845cc9c0134fc23f65c0dee265ac9c6fbf11f1be1fb6f5c9ecad8ce798",
+    "examples/datasets/colmap.py": "cc1d8a6173f210f8daa35746076a5c4c86f95535db08d00c6fb8e1510ac0edec",
+    "examples/utils.py": "3032c4a1258d082dc159953cf05ce43a0d30287568bd13eecadbd04bec558ce0",
+    "examples/simple_trainer.py": "b613002c09c09ca7470066466a79b613c4cfdfab24ffe21c41dd053428d84334",
+    "gsplat/strategy/default.py": "7c645f7dc95b88d53ca9f83b4fd6c85d2769676ddade2068e05f2dd084aa8db0",
+    "scripts/download-room-small.py": "4e8cf4ff29bdfa2c8327b6f678f99ef9ee4249c5ce610e20982122ea01581c1c",
+    "docs/SMALL_DATASET_WIN.md": "7fafd72df965c6651f895b91e8f7d3cf46947795827e52bd2976972d0e81011c"
+  },
+  "production_code_changed_by_stage0": false,
+  "training_executed_in_stage0": false,
+  "existing_room_modified_by_stage0": false
+}

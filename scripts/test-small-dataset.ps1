@@ -8,7 +8,12 @@ param(
     [int]$RefineStart = 100,
     [int]$RefineStop = 500,
     [ValidateRange(1, 30000)][int]$ResetEvery = 1000,
-    [switch]$BuildOnly
+    [switch]$BuildOnly,
+    [ValidateSet('default', 'budget')][string]$Strategy = 'default',
+    [ValidateRange(1, 10000000)][int]$GaussianBudget = 700000,
+    [double]$ErrorWeight = 1.0,
+    [double]$EdgeWeight = 0.0,
+    [ValidateSet('random', 'long_axis')][string]$SplitMode = 'random'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,13 +57,19 @@ try {
         if (-not (Test-Path -LiteralPath $DataDir)) { throw "Dataset not found: $DataDir" }
         $checkpointArgs = @()
         if ($Checkpoint) { $checkpointArgs = @('--ckpt', $Checkpoint) }
-        & $python -u examples/simple_trainer.py default `
+        $strategyArgs = @()
+        if ($Strategy -eq 'budget') {
+            $strategyArgs = @('--strategy.cap-max', $GaussianBudget,
+                '--strategy.error-weight', $ErrorWeight, '--strategy.edge-weight', $EdgeWeight,
+                '--strategy.split-mode', $SplitMode)
+        }
+        & $python -u examples/simple_trainer.py $Strategy `
             --data-dir $DataDir --data-factor 1 --result-dir $ResultDir `
             --max-steps $Steps --eval-steps 1 $Steps --save-steps $Steps `
             --save-ply --ply-steps $Steps --disable-viewer --disable-video `
             --batch-size 1 --packed --sh-degree $ShDegree --sh-degree-interval $ShDegreeInterval --cache-images `
             --strategy.refine-start-iter $RefineStart --strategy.refine-stop-iter $RefineStop `
-            --strategy.refine-every 100 --strategy.reset-every $ResetEvery @checkpointArgs 2>&1 | ForEach-Object { $_.ToString() }
+            --strategy.refine-every 100 --strategy.reset-every $ResetEvery @strategyArgs @checkpointArgs 2>&1 | ForEach-Object { $_.ToString() }
     }
     $nativeExitCode = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'

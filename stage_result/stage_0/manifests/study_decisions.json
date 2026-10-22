@@ -1,0 +1,76 @@
+{
+  "version": "stage0-v1",
+  "date_local": "2026-10-10",
+  "timezone": "Asia/Saigon",
+  "status": "prospective_no_ccd_results",
+  "research_question": "Does bounded discarded extrinsic-pose probing identify useful Gaussian splits beyond corrected gradients and equal-compute permanent camera refinement?",
+  "hypotheses": {
+    "H1": "diagnostic rankings change reproducibly beyond numerical variation",
+    "H2": "response-based scoring predicts conditional split utility beyond original and corrected gradients",
+    "H3": "allocation improves quality/count beyond strong pose and growth controls, with full cost accounting"
+  },
+  "scope": {
+    "pose_parameters": ["rotation", "translation"],
+    "growth_operation": "split_selection",
+    "strategy": "DefaultStrategy",
+    "absgrad": false,
+    "probe_correction": "discarded",
+    "real_camera_policy": "common ordinary pose refinement for all pose-enabled comparisons",
+    "deferred": ["exposure", "intrinsics", "distortion_estimation", "rolling_shutter", "new_cuda_kernels", "joint_clone_split_innovation", "mcmc", "multi_view_aggregation_until_single_view_utility_gate"]
+  },
+  "primary_outcome": "reconstruction_quality_versus_gaussian_count",
+  "primary_comparator": "ordinary_density_control_with_common_pose_refinement",
+  "mandatory_controls": ["extra_pose_updates_equal_compute", "retain_probe_corrections_ordinary_growth", "corrected_gradient_only", "original_gradient", "matched_random_suppression", "delayed_growth", "multi_view_without_pose_probe"],
+  "quality_margins": {
+    "psnr_loss_db_max": 0.20,
+    "ssim_loss_max": 0.005,
+    "lpips_increase_max": 0.010,
+    "aggregation": "mean_per_view_within_scene; per_scene_and_condition_first"
+  },
+  "aspirations_not_predictions": {
+    "final_count_ratio_max": 0.80,
+    "probe_training_overhead_ratio_max": 0.20
+  },
+  "initial_probe_proposal": {
+    "updates": 5,
+    "optimizer": "Adam",
+    "rotation_bound_degrees_total": 1.0,
+    "translation_bound_scene_scale_total": 0.005,
+    "pose_prior_weight": 0.001,
+    "fitting_image_role": "train",
+    "signal_measurement_loss": "photometric_only_same_before_after",
+    "composition": "camera_to_world_right_composition",
+    "status": "development_proposal_not_final_campaign_setting"
+  },
+  "utility": {
+    "definition": "mean_development_RGB_MSE_no_split_minus_split",
+    "short_horizon_steps_proposed": 200,
+    "long_horizon_subset_steps_proposed": 1000,
+    "candidates_per_checkpoint_proposed": 24,
+    "top_k_fraction": 0.25,
+    "minimum_normalized_excess_top_k_utility": 0.005,
+    "noise_multiplier": 5,
+    "noise_reference": "95th_percentile_absolute_no_intervention_branch_loss_difference"
+  },
+  "exploratory_runs": {
+    "seeds": [0, 1, 2],
+    "analytic_spheres_v1": {"steps": 3000, "budget_caps": [2560, 5120, 10240]},
+    "room_small": {"steps": 7000, "budget_caps": [200000, 300000, 500000]},
+    "checkpoints_fraction_of_active_split_window": [0.25, 0.50, 0.75],
+    "stock_strategy_cap_support": false
+  },
+  "training_pose_disturbance_proposals": {
+    "clean": {"rotation_bound_degrees": 0.0, "translation_bound_scene_scale": 0.0},
+    "mild": {"rotation_bound_degrees": 0.5, "translation_bound_scene_scale": 0.0025},
+    "moderate": {"rotation_bound_degrees": 2.0, "translation_bound_scene_scale": 0.01},
+    "policy": "isotropic_independent_directions_uniform_magnitudes; training_only; fixed_initial_point_cloud; save_exact_transforms_in_stage1"
+  },
+  "data": {
+    "split_rule": "lexicographic_zero_based_index_mod8:test0,development4,train_other",
+    "analytic_spheres_v1_counts": {"train": 36, "development": 6, "test": 6},
+    "room_small_counts": {"train": 233, "development": 39, "test": 39},
+    "room_paper_role": "previously_exposed_development_scene",
+    "final_paper_evidence": "fresh_scenes_with_frozen_protocol_required"
+  },
+  "next_stage": "Stage 1 baseline and full-state replay preparation"
+}

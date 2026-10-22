@@ -1,4 +1,4 @@
-"""Fetch official room photographs and COLMAP at a selected resolution."""
+"""Fetch an official Mip-NeRF 360 scene and COLMAP at a selected resolution."""
 
 import argparse
 import io
@@ -59,26 +59,33 @@ class RemoteZip(io.RawIOBase):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scene", choices=("room", "counter", "kitchen", "bonsai", "bicycle", "garden", "stump", "flowers", "treehill"), default="room")
     parser.add_argument("--image-factor", type=int, choices=(1, 2, 4, 8), default=8)
     parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
-    output = (args.output_dir or Path("data/room_small" if args.image_factor == 8 else f"data/room_factor{args.image_factor}")).resolve()
+    output = (args.output_dir or Path(f"data/{args.scene}_small" if args.image_factor == 8 else f"data/{args.scene}_factor{args.image_factor}")).resolve()
     output.mkdir(parents=True, exist_ok=True)
     manifest_path = output / "dataset_manifest.json"
-    if manifest_path.exists() and json.loads(manifest_path.read_text())["source_image_factor"] != args.image_factor:
-        raise ValueError("Use a different output directory for each image factor")
+    if manifest_path.exists():
+        previous = json.loads(manifest_path.read_text())
+        if previous["source_image_factor"] != args.image_factor or previous["scene"] != args.scene:
+            raise ValueError("Use a different output directory for each scene and image factor")
     image_folder = "images" if args.image_factor == 1 else f"images_{args.image_factor}"
-    image_prefix = f"room/{image_folder}/"
+    scene_prefix = f"{args.scene}/"
+    sparse_prefix = f"{scene_prefix}sparse/0/"
+    image_prefix = f"{scene_prefix}{image_folder}/"
     source = output / "source"
     remote = RemoteZip(URL)
     with zipfile.ZipFile(remote) as archive:
         selected = [entry for entry in archive.infolist() if not entry.is_dir() and
-                    (entry.filename.startswith(image_prefix) or entry.filename.startswith("room/sparse/0/"))]
+                    (entry.filename.startswith(image_prefix) or entry.filename.startswith(sparse_prefix))]
         compressed_bytes = sum(entry.compress_size for entry in selected)
         print(f"Downloading {len(selected)} files: {compressed_bytes / 1024**2:.2f} MiB instead of {remote.size / 1024**3:.2f} GiB", flush=True)
-        for prefix in (image_prefix, "room/sparse/0/"):
+        for prefix in (image_prefix, sparse_prefix):
             entries = [entry for entry in selected if entry.filename.startswith(prefix)]
-            if all((source / entry.filename.removeprefix("room/")).exists() for entry in entries):
+            if not entries:
+                raise ValueError(f"Archive contains no entries for {prefix}")
+            if all((source / entry.filename.removeprefix(scene_prefix)).exists() for entry in entries):
                 print(f"Reusing {prefix}", flush=True)
                 continue
             start = min(entry.header_offset for entry in entries)
@@ -86,7 +93,7 @@ def main():
             print(f"Fetching {prefix}: {(end - start) / 1024**2:.2f} MiB", flush=True)
             remote.fetch(start, end - start)
             for entry in entries:
-                target = source / entry.filename.removeprefix("room/")
+                target = source / entry.filename.removeprefix(scene_prefix)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 # ZipFile checks the decompressed data against the archive CRC.
                 target.write_bytes(archive.read(entry))
@@ -110,7 +117,7 @@ def main():
     sparse.mkdir(parents=True, exist_ok=True)
     reconstruction.write(str(sparse))
     manifest = {
-        "source_url": URL, "scene": "room", "source_image_factor": args.image_factor,
+        "source_url": URL, "scene": args.scene, "source_image_factor": args.image_factor,
         "images": reconstruction.num_reg_images(), "points": reconstruction.num_points3D(),
         "image_dimensions": dimensions, "compressed_dataset_bytes": compressed_bytes,
         "archive_bytes": remote.size,
