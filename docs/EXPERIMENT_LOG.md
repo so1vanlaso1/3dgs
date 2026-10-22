@@ -875,3 +875,42 @@ diverge. The main experiment also replaces cloning, so it does not isolate
 long-axis placement from scale/opacity changes or the clone policy. No parameter
 tuning, repeat training, extra recovery training or paper-wide reproduction
 was performed. Existing defaults remain available for controlled comparisons.
+
+## 17. A04 on three additional scenes: Counter, Kitchen and Bonsai
+
+**Date:** 2026-10-22, Asia/Saigon. **Status:** six fresh 7,000-update training
+runs completed; three A04 checkpoint reloads and all comparison/artifact checks
+passed. See [full protocol, results and reproduction](MULTISCENE_A04.md).
+
+Counter, Kitchen and Bonsai were chosen before observing their results. Each
+baseline/A04 pair used official half-resolution images, the same per-scene SfM
+initialization and every-eighth-image held-out split, and the existing Room
+optimizer/loss/densification schedule. A04 retained the 700k cap, weights 1/1/0.25
+and LAS settings 0.45/0.6 without tuning. No extra training or recovery updates
+were added. Runs used the existing local GTX 1660 SUPER sequentially.
+
+| Scene | B00 Gaussians | A04 Gaussians | Reduction | B00 PSNR | A04 PSNR | B00 SSIM | A04 SSIM | B00 LPIPS | A04 LPIPS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Counter | 749,489 | 569,520 | 24.01% | 27.5592 | 27.8234 | 0.88694 | 0.89029 | 0.19605 | 0.18897 |
+| Kitchen | 1,066,757 | 699,357 | 34.44% | 29.7438 | 30.0037 | 0.91504 | 0.91546 | 0.11620 | 0.11467 |
+| Bonsai | 1,017,191 | 695,971 | 31.58% | 30.2772 | 30.4295 | 0.92753 | 0.92846 | 0.15912 | 0.15697 |
+
+Final in-memory held-out metrics are shown above; separate reload metrics and
+their tolerances are in the per-scene JSON reports. On all three additional
+scenes, A04 improved PSNR, SSIM and LPIPS while reducing Gaussian count. Across
+the three scenes, unweighted mean count reduction was 30.01% and mean paired
+PSNR gain was 0.2254 dB. Trainer time and peak tensor allocation also decreased
+in each pair; time is a single-run observation with the existing timer scope.
+
+Evidence root: `results/multiscene_a04_20261022`. It contains per-scene logs,
+configs, checkpoint/PLY/renders, `comparison.json`, A04 reloads, combined
+`summary.json`/`summary.md`, and `comparison.png`. The `evidence` folder contains
+source snapshots/hashes, exact image-role/hash manifests, dataset preservation
+checks, GPU information and package versions. All checked PLY/checkpoint values
+are finite, counts agree, all 102 expected full-resolution held-out renders per
+method are present, and campaign source hashes still match.
+
+Scope remains one seed per method/scene and indoor scenes only. This extends the
+earlier Room evidence; it does not isolate axis placement from opacity/scale and
+clone-policy changes, establish uncertainty, or test CCD-GS pose probing. Repeat
+seeds, outdoor evaluation and independent camera-sampling RNG remain priorities.

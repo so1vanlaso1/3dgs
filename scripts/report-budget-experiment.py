@@ -1,4 +1,4 @@
-"""Compare completed room runs under matching training/evaluation settings."""
+"""Compare completed runs under matching training/evaluation settings."""
 
 import argparse
 import json
@@ -120,7 +120,7 @@ def main():
     )
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     lines = ["# Budgeted Gaussian allocation experiment", "",
-             f"All variants use {baseline['steps']:,} optimizer updates and the same room dataset/evaluation settings.", "",
+             f"All variants use {baseline['steps']:,} optimizer updates and the same dataset/evaluation settings.", "",
              "| Variant | Gaussians | PSNR | SSIM | LPIPS | Train seconds | Peak tensor GiB |",
              "|---|---:|---:|---:|---:|---:|---:|"]
     for label, run in [("Baseline", baseline), *runs.items()]:
