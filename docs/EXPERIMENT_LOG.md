@@ -914,3 +914,22 @@ Scope remains one seed per method/scene and indoor scenes only. This extends the
 earlier Room evidence; it does not isolate axis placement from opacity/scale and
 clone-policy changes, establish uncertainty, or test CCD-GS pose probing. Repeat
 seeds, outdoor evaluation and independent camera-sampling RNG remain priorities.
+
+## 18. Repeated seeds and crop analysis, finalized at user request
+
+**Date:** 27 October 2026. The user requested skipping all unfinished work. The campaign and monitor were stopped. Completed evidence: 21 full 7,000-update runs, 10 matched pairs, one completed unpaired Bonsai B00 seed43 run. The interrupted Bonsai A04 seed43 run is excluded.
+
+These fresh runs use independent DataLoader sampling. Initialization and all 7,000 camera IDs match in each included pair. Historical results are preserved and excluded from these seed averages.
+
+| Scene | Pairs | Mean PSNR gain | 95% paired t interval | Mean Gaussian reduction |
+|---|---:|---:|---|---:|
+| room | 3 | +0.5688 dB | [+0.3599, +0.7777] | 28.37% |
+| counter | 3 | +0.1361 dB | [+0.0807, +0.1916] | 24.25% |
+| kitchen | 3 | +0.1297 dB | [-0.1458, +0.4052] | 35.27% |
+| bonsai | 1 | +0.3866 dB | Not estimated (one pair) | 32.74% |
+
+Room and Counter have positive intervals in this small study. Kitchen's interval crosses zero and its SSIM changes are small and mixed. Bonsai remains one-pair evidence. Three-seed intervals are imprecise, conditional on this protocol and split; no population generalization claim follows.
+
+Component ablations, multi-budget sweep, parameter tuning and the full CCD-GS mechanism matrix were **skipped**. Their implementations/plans and CCD smoke artifacts do not constitute scientific results. The split/budget/sampler checks reported 23 passed; the completed Room A04 seed42 checkpoint reload reproduced PSNR within 0.0000026 dB.
+
+[Final report](../results/research_completion_20261027/REPORT.md), [full-precision statistics](../results/research_completion_20261027/statistics.json), [visual review](../results/research_completion_20261027/VISUAL_REVIEW.md), [status and skipped matrix](../results/research_completion_20261027/status.json). All raw completed-run artifacts, source snapshots and interrupted output are retained.

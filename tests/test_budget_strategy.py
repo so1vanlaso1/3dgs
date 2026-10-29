@@ -83,6 +83,42 @@ def test_rejects_initial_count_over_budget_and_invalid_settings():
         BudgetStrategy(error_weight=float("nan"))
 
 
+@pytest.mark.parametrize("mode,policy,expected", [
+    ("random", "clone", (1, 1)), ("long_axis", "clone", (1, 1)),
+    ("random", "split", (0, 2)), ("long_axis", "split", (0, 2)),
+    ("random", "method_default", (1, 1)),
+    ("long_axis", "method_default", (0, 2)),
+])
+def test_clone_policy_is_independent_of_split_operator(mode, policy, expected):
+    strategy = BudgetStrategy(cap_max=4, refine_start_iter=0, refine_stop_iter=2,
+        refine_every=1, error_weight=0, split_mode=mode, clone_policy=policy)
+    params, opts = make_params(2)
+    params['scales'].data[1].fill_(-2)
+    sum(p.square().sum() for p in params.values()).backward()
+    for opt in opts.values():
+        opt.step()
+        opt.zero_grad()
+    state = strategy.initialize_state()
+    strategy._ensure_state(params, state)
+    state.update(grad2d=torch.ones(2), count=torch.ones(2))
+    assert strategy._grow_gs(params, opts, state, 1) == expected
+    assert len(params['means']) == 4
+
+
+def test_independent_sampler_ignores_structural_random_draws():
+    def sequence(draws):
+        generator = torch.Generator().manual_seed(104771)
+        loader = torch.utils.data.DataLoader(list(range(23)), batch_size=1,
+                                            shuffle=True, generator=generator)
+        result = []
+        for _ in range(3):
+            for item in loader:
+                result.extend(item.tolist())
+                torch.randn(draws)
+        return result
+    assert sequence(0) == sequence(1000)
+
+
 def test_split_adds_one_net_gaussian_and_can_underfill():
     strategy = BudgetStrategy(cap_max=7, refine_start_iter=0, refine_stop_iter=2,
                               refine_every=1, error_weight=0)

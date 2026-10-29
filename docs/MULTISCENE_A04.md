@@ -152,3 +152,12 @@ All reload metric deltas meet the pre-existing tolerances: 0.02 dB PSNR,
 `<scene>/comparison.json` for full-precision reload metrics and deltas.
 
 ![A04 count reduction and PSNR gain](../results/multiscene_a04_20261022/comparison.png)
+
+## Later repeated-seed evidence
+
+The 27 October campaign completed three matched seeds on Room, Counter and
+Kitchen, plus one Bonsai pair, before the user requested stopping remaining work.
+It uses an independent camera sampler and excludes the historical runs above
+from its seed averages. Kitchen's new PSNR interval crosses zero and its SSIM
+changes are small and mixed. See the [completed-results report](../results/research_completion_20261027/REPORT.md)
+for all results, uncertainty, crops and explicitly skipped experiments.

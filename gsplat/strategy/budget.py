@@ -38,10 +38,14 @@ class BudgetStrategy(DefaultStrategy):
     split_mode: Literal["random", "long_axis"] = "random"
     split_distance: float = 0.45
     opacity_reduction: float = 0.6
+    # Separate child generation from the treatment of normally cloned parents.
+    clone_policy: Literal["method_default", "clone", "split"] = "method_default"
 
     def __post_init__(self):
         if self.split_mode not in ("random", "long_axis"):
             raise ValueError(f"Unknown split mode: {self.split_mode}")
+        if self.clone_policy not in ("method_default", "clone", "split"):
+            raise ValueError(f"Unknown clone policy: {self.clone_policy}")
         if not 0 < self.split_distance <= 0.5 or not 0 < self.opacity_reduction < 1:
             raise ValueError("Require 0 < split_distance <= 0.5 and 0 < opacity_reduction < 1")
         if self.split_mode == "long_axis" and self.revised_opacity:
@@ -212,9 +216,11 @@ class BudgetStrategy(DefaultStrategy):
                 score[candidates].topk(additions, sorted=False).indices
             ]
             chosen[selected] = True
-        # LAS replaces cloning as well as random splitting, as in Improved-GS.
-        is_dupli = chosen & small if self.split_mode == "random" else torch.zeros_like(chosen)
-        is_split = chosen & ~small if self.split_mode == "random" else chosen.clone()
+        replace_clones = self.clone_policy == "split" or (
+            self.clone_policy == "method_default" and self.split_mode == "long_axis"
+        )
+        is_dupli = torch.zeros_like(chosen) if replace_clones else chosen & small
+        is_split = chosen.clone() if replace_clones else chosen & ~small
         if step < self.refine_scale2d_stop_iter:
             is_split |= chosen & (state["radii"] > self.grow_scale2d)
             is_dupli &= ~is_split
@@ -234,7 +240,8 @@ class BudgetStrategy(DefaultStrategy):
         state["growth_history"].append(
             dict(step=step, before=n, target=target,
                  eligible=candidates.numel(), added=additions,
-                 duplicated=n_dupli, split=n_split, split_mode=self.split_mode)
+                 duplicated=n_dupli, split=n_split, split_mode=self.split_mode,
+                 clone_policy=self.clone_policy)
         )
         # New children must not inherit evidence collected for their parent.
         for key in ("error_mass", "edge_mass", "score_count"):

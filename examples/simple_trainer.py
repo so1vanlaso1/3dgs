@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import json
+import hashlib
 import math
 import os
 import time
@@ -77,6 +78,10 @@ from nerfview import CameraState, RenderTabState, apply_float_colormap
 
 @dataclass
 class Config:
+    # Experiment seed; independent_sampling isolates camera order from split RNG.
+    seed: int = 42
+    independent_sampling: bool = False
+    record_experiment: bool = False
     # Disable viewer
     disable_viewer: bool = False
     # Path to the .pt files. If provide, it will skip training and run evaluation only.
@@ -388,7 +393,7 @@ class Runner:
     def __init__(
         self, local_rank: int, world_rank, world_size: int, cfg: Config
     ) -> None:
-        set_random_seed(42 + local_rank)
+        set_random_seed(cfg.seed + local_rank)
 
         self.cfg = cfg
         self.world_rank = world_rank
@@ -813,6 +818,15 @@ class Runner:
         device = self.device
         world_rank = self.world_rank
         world_size = self.world_size
+        experiment = None
+        if cfg.record_experiment:
+            digest = hashlib.sha256()
+            for key, tensor in sorted(self.splats.items()):
+                digest.update(key.encode())
+                digest.update(tensor.detach().cpu().contiguous().numpy().tobytes())
+            experiment = {"seed": cfg.seed, "initial_sha256": digest.hexdigest(),
+                          "independent_sampling": cfg.independent_sampling,
+                          "camera_sequence": []}
 
         # Dump cfg.
         if world_rank == 0:
@@ -863,6 +877,9 @@ class Runner:
         if cfg.cache_images:
             # before the loader starts its workers, which then share the cache
             self.trainset.preload_images()
+        loader_generator = None
+        if cfg.independent_sampling:
+            loader_generator = torch.Generator().manual_seed(cfg.seed + 104729)
         trainloader = torch.utils.data.DataLoader(
             self.trainset,
             batch_size=cfg.batch_size,
@@ -870,6 +887,7 @@ class Runner:
             num_workers=4,
             persistent_workers=True,
             pin_memory=True,
+            generator=loader_generator,
         )
         trainloader_iter = iter(trainloader)
 
@@ -906,6 +924,8 @@ class Runner:
                 pixels.shape[0] * pixels.shape[1] * pixels.shape[2]
             )
             image_ids = data["image_id"].to(device)
+            if experiment is not None:
+                experiment["camera_sequence"].extend(data["image_id"].tolist())
             masks = data["mask"].to(device) if "mask" in data else None  # [1, H, W]
             exposure = (
                 data["exposure"].to(device) if "exposure" in data else None
@@ -1226,6 +1246,18 @@ class Runner:
                 )
                 # Update the scene.
                 self.viewer.update(step, num_train_rays_per_step)
+
+        if experiment is not None:
+            experiment["camera_sequence_sha256"] = hashlib.sha256(
+                np.asarray(experiment["camera_sequence"], dtype="<i8").tobytes()
+            ).hexdigest()
+            experiment["completed_updates"] = max_steps
+            experiment["final_count"] = len(self.splats["means"])
+            with open(Path(cfg.result_dir) / "experiment.json", "w") as stream:
+                json.dump(experiment, stream, indent=2)
+            # Unlike the historical checkpoint, this captures the final update.
+            torch.save({"step": max_steps - 1, "splats": self.splats.state_dict()},
+                       Path(self.ckpt_dir) / "final_post_update.pt")
 
     @torch.no_grad()
     def eval(self, step: int, stage: str = "val"):
