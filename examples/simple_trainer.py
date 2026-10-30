@@ -148,6 +148,8 @@ class Config:
     # memory, instead of decoding one image per step (COLMAP data only). Costs
     # the decoded training set in host memory on every rank.
     cache_images: bool = False
+    # Zero avoids Windows worker spawning and duplicated dataset state.
+    data_workers: int = 4
     # Steps to evaluate the model
     eval_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
     # Steps to save the model
@@ -257,6 +259,8 @@ class Config:
     depth_loss: bool = False
     # Weight for depth loss
     depth_lambda: float = 1e-2
+    # Explicit opt-in to calibrated sensor samples, in pre-normalization COLMAP units.
+    sensor_depth_dir: Optional[str] = None
 
     # Dump information to tensorboard every this steps
     tb_every: int = 100
@@ -418,6 +422,8 @@ class Runner:
         self.writer = SummaryWriter(log_dir=f"{cfg.result_dir}/tb")
 
         # Load data: Training data should contain initial points and colors.
+        if cfg.sensor_depth_dir and (not cfg.depth_loss or cfg.data_type != "colmap"):
+            raise ValueError("sensor_depth_dir requires depth_loss and the colmap backend")
         if cfg.data_type == "ncore":
             if cfg.cache_images:
                 raise ValueError("cache_images is not supported for NCore data.")
@@ -464,6 +470,7 @@ class Runner:
                 split="train",
                 patch_size=cfg.patch_size,
                 load_depths=cfg.depth_loss,
+                sensor_depth_dir=cfg.sensor_depth_dir,
             )
             self.valset = Dataset(self.parser, split="val")
         self.scene_scale = self.parser.scene_scale * 1.1 * cfg.global_scale
@@ -884,8 +891,8 @@ class Runner:
             self.trainset,
             batch_size=cfg.batch_size,
             shuffle=True,
-            num_workers=4,
-            persistent_workers=True,
+            num_workers=cfg.data_workers,
+            persistent_workers=cfg.data_workers > 0,
             pin_memory=True,
             generator=loader_generator,
         )
@@ -1269,7 +1276,7 @@ class Runner:
         world_size = self.world_size
 
         valloader = torch.utils.data.DataLoader(
-            self.valset, batch_size=1, shuffle=False, num_workers=1
+            self.valset, batch_size=1, shuffle=False, num_workers=min(1, cfg.data_workers)
         )
         ellipse_time = 0
         metrics = defaultdict(list)

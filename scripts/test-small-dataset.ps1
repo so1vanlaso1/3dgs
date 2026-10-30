@@ -13,7 +13,15 @@ param(
     [ValidateRange(1, 10000000)][int]$GaussianBudget = 700000,
     [double]$ErrorWeight = 1.0,
     [double]$EdgeWeight = 0.0,
-    [ValidateSet('random', 'long_axis')][string]$SplitMode = 'random'
+    [ValidateSet('random', 'long_axis')][string]$SplitMode = 'random',
+    [string]$SensorDepthDir,
+    [double]$DepthWeight = 0.01,
+    [int]$TestEvery = 8,
+    [switch]$RecordExperiment,
+    [int]$DataWorkers = 4,
+    [switch]$NoCacheImages,
+    [int[]]$Milestones = @(),
+    [ValidateSet('method_default', 'clone', 'split')][string]$ClonePolicy = 'method_default'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,18 +66,29 @@ try {
         $checkpointArgs = @()
         if ($Checkpoint) { $checkpointArgs = @('--ckpt', $Checkpoint) }
         $strategyArgs = @()
+        $experimentArgs = @('--test-every', $TestEvery, '--data-workers', $DataWorkers)
+        if (-not $NoCacheImages) { $experimentArgs += '--cache-images' }
+        if ($SensorDepthDir) {
+            $experimentArgs += @('--depth-loss', '--sensor-depth-dir', $SensorDepthDir,
+                '--depth-lambda', $DepthWeight)
+        }
+        if ($RecordExperiment) {
+            $experimentArgs += @('--record-experiment', '--independent-sampling')
+        }
+        $evalMilestones = @(1) + $Milestones + @($Steps) | Select-Object -Unique
+        $saveMilestones = $Milestones + @($Steps) | Select-Object -Unique
         if ($Strategy -eq 'budget') {
             $strategyArgs = @('--strategy.cap-max', $GaussianBudget,
                 '--strategy.error-weight', $ErrorWeight, '--strategy.edge-weight', $EdgeWeight,
-                '--strategy.split-mode', $SplitMode)
+                '--strategy.split-mode', $SplitMode, '--strategy.clone-policy', $ClonePolicy)
         }
         & $python -u examples/simple_trainer.py $Strategy `
             --data-dir $DataDir --data-factor 1 --result-dir $ResultDir `
-            --max-steps $Steps --eval-steps 1 $Steps --save-steps $Steps `
+            --max-steps $Steps --eval-steps @evalMilestones --save-steps @saveMilestones `
             --save-ply --ply-steps $Steps --disable-viewer --disable-video `
-            --batch-size 1 --packed --sh-degree $ShDegree --sh-degree-interval $ShDegreeInterval --cache-images `
+            --batch-size 1 --packed --sh-degree $ShDegree --sh-degree-interval $ShDegreeInterval `
             --strategy.refine-start-iter $RefineStart --strategy.refine-stop-iter $RefineStop `
-            --strategy.refine-every 100 --strategy.reset-every $ResetEvery @strategyArgs @checkpointArgs 2>&1 | ForEach-Object { $_.ToString() }
+            --strategy.refine-every 100 --strategy.reset-every $ResetEvery @strategyArgs @experimentArgs @checkpointArgs 2>&1 | ForEach-Object { $_.ToString() }
     }
     $nativeExitCode = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'

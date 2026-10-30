@@ -2,7 +2,9 @@ param(
     [string]$Checkpoint = 'results/room_gtx1660/ckpts/ckpt_599_rank0.pt',
     [string]$DataDir = 'data/room_small',
     [ValidateRange(1, 65535)][int]$Port = 8080,
-    [switch]$Background
+    [switch]$Background,
+    [int]$CameraIndex = 0,
+    [string]$OutputDir = 'results/room_gtx1660/viewer'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,14 +46,14 @@ $env:PYTHONUNBUFFERED = '1'
 Write-Host "Room viewer: http://localhost:$Port"
 if ($Background) {
     $viewerProcess = Start-Process -FilePath $python -WorkingDirectory $repoRoot -WindowStyle Hidden -PassThru `
-        -ArgumentList @('-u', 'examples/simple_viewer.py', '--ckpt', "`"$Checkpoint`"", '--camera_data_dir', "`"$DataDir`"", '--port', $Port, '--output_dir', 'results/room_gtx1660/viewer') `
+        -ArgumentList @('-u', 'examples/simple_viewer.py', '--ckpt', "`"$Checkpoint`"", '--camera_data_dir', "`"$DataDir`"", '--camera_index', $CameraIndex, '--port', $Port, '--output_dir', "`"$OutputDir`"") `
         -RedirectStandardOutput (Join-Path $repoRoot '.cache/room-viewer.stdout.log') `
         -RedirectStandardError (Join-Path $repoRoot '.cache/room-viewer.stderr.log')
     Write-Host "Background process ID: $($viewerProcess.Id). Stop with: taskkill.exe /PID $($viewerProcess.Id) /T /F"
 } else {
     Push-Location $repoRoot
     try {
-        & $python -u examples/simple_viewer.py --ckpt $Checkpoint --camera_data_dir $DataDir --port $Port --output_dir results/room_gtx1660/viewer
+        & $python -u examples/simple_viewer.py --ckpt $Checkpoint --camera_data_dir $DataDir --camera_index $CameraIndex --port $Port --output_dir $OutputDir
         if ($LASTEXITCODE -ne 0) { throw "Viewer exited with code $LASTEXITCODE." }
     } finally {
         Pop-Location

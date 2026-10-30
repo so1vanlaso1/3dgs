@@ -317,15 +317,17 @@ def main(local_rank: int, world_rank, world_size: int, args):
         from datasets.colmap import Parser
 
         parser = Parser(args.camera_data_dir, factor=1, normalize=True)
-        c2w = parser.camtoworlds[0]
-        camera_id = parser.camera_ids[0]
+        if not 0 <= args.camera_index < len(parser.image_names):
+            raise ValueError("camera_index is outside the dataset")
+        c2w = parser.camtoworlds[args.camera_index]
+        camera_id = parser.camera_ids[args.camera_index]
         _, image_height = parser.imsize_dict[camera_id]
         fy = parser.Ks_dict[camera_id][1, 1]
         server.initial_camera.position = c2w[:3, 3]
         server.initial_camera.look_at = c2w[:3, 3] + c2w[:3, 2]
         server.initial_camera.up = -c2w[:3, 1]
         server.initial_camera.fov = 2 * math.atan(image_height / (2 * fy))
-        print("Initial view set from the dataset's first camera.")
+        print(f"Initial view: {parser.image_names[args.camera_index]}")
     viewer_kwargs = dict(
         server=server,
         render_fn=viewer_render_fn,
@@ -371,6 +373,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--port", type=int, default=8080, help="port for the viewer server"
     )
+    parser.add_argument("--camera_index", type=int, default=0, help="initial registered image index")
     parser.add_argument(
         "--with_ut", action="store_true", help="use uncentered transform"
     )
