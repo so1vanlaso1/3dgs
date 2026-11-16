@@ -25,6 +25,21 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Optional run-specific override, read at training launch after preparation.
+# Only an explicit sidecar next to this dataset can change these settings.
+$datasetPath = [IO.Path]::GetFullPath($DataDir)
+$overridePath = Join-Path (Split-Path -Parent $datasetPath) 'training_override.json'
+if (Test-Path -LiteralPath $overridePath -PathType Leaf) {
+    $override = Get-Content -LiteralPath $overridePath -Raw | ConvertFrom-Json
+    if ($override.schema -ne 'gsplat_training_override_v1' -or
+        $override.steps -lt 1000 -or $override.steps -gt 500000 -or
+        $override.gaussian_budget -lt 10000 -or $override.gaussian_budget -gt 10000000) {
+        throw "Invalid training override: $overridePath"
+    }
+    $Steps = [int]$override.steps
+    $GaussianBudget = [int]$override.gaussian_budget
+    Write-Host "Run-specific override from $overridePath : steps=$Steps GaussianBudget=$GaussianBudget"
+}
 if ($Steps -lt 1) { throw 'Steps must be positive.' }
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $repoRoot '.venv/Scripts/python.exe'

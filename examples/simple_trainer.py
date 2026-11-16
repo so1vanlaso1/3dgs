@@ -40,6 +40,8 @@ from datasets.traj import (
     generate_spiral_path,
 )
 from gsplat.losses import (
+    confidence_depth_l1_loss,
+    sensor_coverage_loss,
     depth_l1_loss,
     l1_loss,
     opacity_reg_loss,
@@ -72,6 +74,7 @@ except ModuleNotFoundError as e:
     ) from e
 from gsplat.cuda._wrapper import CameraModel
 from gsplat.strategy import BudgetStrategy, DefaultStrategy, MCMCStrategy
+from gsplat.surface import surface_depth_loss
 from gsplat_viewer import GsplatViewer, GsplatRenderTabState
 from nerfview import CameraState, RenderTabState, apply_float_colormap
 
@@ -81,6 +84,8 @@ class Config:
     # Experiment seed; independent_sampling isolates camera order from split RNG.
     seed: int = 42
     independent_sampling: bool = False
+    # Replay a saved list of training-set image indices for paired experiments.
+    camera_sequence_path: Optional[str] = None
     record_experiment: bool = False
     # Disable viewer
     disable_viewer: bool = False
@@ -259,6 +264,13 @@ class Config:
     depth_loss: bool = False
     # Weight for depth loss
     depth_lambda: float = 1e-2
+    # Weight sensor observations by their per-sample evidence confidence.
+    depth_confidence: bool = False
+    # Optional opacity prior at supported sensor-depth observations only.
+    sensor_alpha_lambda: float = 0.0
+    # Experimental edge-aware curvature prior on expected rendered log-depth.
+    surface_lambda: float = 0.0
+    surface_start: int = 3000
     # Explicit opt-in to calibrated sensor samples, in pre-normalization COLMAP units.
     sensor_depth_dir: Optional[str] = None
 
@@ -424,6 +436,10 @@ class Runner:
         # Load data: Training data should contain initial points and colors.
         if cfg.sensor_depth_dir and (not cfg.depth_loss or cfg.data_type != "colmap"):
             raise ValueError("sensor_depth_dir requires depth_loss and the colmap backend")
+        if cfg.depth_confidence and not cfg.sensor_depth_dir:
+            raise ValueError("depth_confidence requires sensor_depth_dir")
+        if cfg.sensor_alpha_lambda < 0 or (cfg.sensor_alpha_lambda and not cfg.depth_confidence):
+            raise ValueError("sensor_alpha_lambda must be nonnegative and requires depth_confidence")
         if cfg.data_type == "ncore":
             if cfg.cache_images:
                 raise ValueError("cache_images is not supported for NCore data.")
@@ -890,7 +906,9 @@ class Runner:
         trainloader = torch.utils.data.DataLoader(
             self.trainset,
             batch_size=cfg.batch_size,
-            shuffle=True,
+            shuffle=cfg.camera_sequence_path is None,
+            sampler=(json.loads(Path(cfg.camera_sequence_path).read_text())
+                     if cfg.camera_sequence_path is not None else None),
             num_workers=cfg.data_workers,
             persistent_workers=cfg.data_workers > 0,
             pin_memory=True,
@@ -963,7 +981,7 @@ class Runner:
                 near_plane=cfg.near_plane,
                 far_plane=cfg.far_plane,
                 image_ids=image_ids,
-                render_mode="RGB+ED" if cfg.depth_loss else "RGB",
+                render_mode="RGB+ED" if (cfg.depth_loss or cfg.surface_lambda > 0) else "RGB",
                 masks=masks,
                 frame_idcs=image_ids,
                 camera_idcs=data["camera_idx"].to(device),
@@ -996,7 +1014,9 @@ class Runner:
                 and not self._gaussians_frozen
             ):
                 self.cfg.strategy.observe_image(
-                    self.splats, self.strategy_state, step, info, colors, pixels, masks
+                    self.splats, self.strategy_state, step, info, colors, pixels, masks,
+                    camera_ids=data["image_id"].tolist()
+                    if self.cfg.strategy.fallback_rank != "off" else None,
                 )
             if masks is not None:
                 # Exclude masked pixels (e.g. ego vehicle) from L1.
@@ -1013,6 +1033,11 @@ class Runner:
                 colors_ssim.permute(0, 3, 1, 2), pixels_ssim.permute(0, 3, 1, 2)
             )
             loss = torch.lerp(l1loss, ssimloss, cfg.ssim_lambda)
+            if cfg.surface_lambda > 0 and step >= cfg.surface_start:
+                surface_loss = surface_depth_loss(depths, pixels, alphas, masks)
+                loss = loss + cfg.surface_lambda * surface_loss
+                if step % cfg.tb_every == 0:
+                    self.writer.add_scalar("train/surface_loss", surface_loss.item(), step)
             if cfg.depth_loss:
                 # query depths from depth map
                 points = torch.stack(
@@ -1023,15 +1048,25 @@ class Runner:
                     dim=-1,
                 )  # normalize to [-1, 1]
                 grid = points.unsqueeze(2)  # [1, M, 1, 2]
-                depths = F.grid_sample(
+                sampled_depths = F.grid_sample(
                     depths.permute(0, 3, 1, 2), grid, align_corners=True
-                )  # [1, 1, M, 1]
-                depths = depths.squeeze(3).squeeze(1)  # [1, M]
+                ).squeeze(3).squeeze(1) if points.shape[1] else depths.sum().reshape(1, 1)[:, :0]
                 # calculate loss in disparity space
-                depthloss = depth_l1_loss(
-                    depths, depths_gt, scene_scale=self.scene_scale
-                )
+                if cfg.depth_confidence:
+                    depthloss = confidence_depth_l1_loss(
+                        sampled_depths, depths_gt, data["depth_confidence"].to(device),
+                        scene_scale=self.scene_scale)
+                elif sampled_depths.numel():
+                    depthloss = depth_l1_loss(sampled_depths, depths_gt, scene_scale=self.scene_scale)
+                else:
+                    depthloss = depths.sum() * 0.
                 loss += depthloss * cfg.depth_lambda
+                if cfg.sensor_alpha_lambda:
+                    sampled_alpha = F.grid_sample(
+                        alphas.permute(0, 3, 1, 2), grid, align_corners=True
+                    ).squeeze(3).squeeze(1) if points.shape[1] else alphas.sum().reshape(1, 1)[:, :0]
+                    loss += cfg.sensor_alpha_lambda * sensor_coverage_loss(
+                        sampled_alpha, depths_gt, data["depth_confidence"].to(device))
             if cfg.post_processing == "bilateral_grid":
                 post_processing_reg_loss = 10 * total_variation_loss(
                     self.post_processing_module.grids
@@ -1255,6 +1290,15 @@ class Runner:
                 self.viewer.update(step, num_train_rays_per_step)
 
         if experiment is not None:
+            nonfinite = {name: int((~torch.isfinite(value)).sum().item())
+                         for name, value in self.splats.items()
+                         if not torch.isfinite(value).all()}
+            experiment["finite_parameters"] = not nonfinite
+            if nonfinite:
+                experiment["failure"] = {"reason": "nonfinite_final_parameters", "counts": nonfinite}
+                with open(Path(cfg.result_dir) / "experiment_failed.json", "w") as stream:
+                    json.dump(experiment, stream, indent=2)
+                raise FloatingPointError(f"Non-finite final Gaussian parameters: {nonfinite}")
             experiment["camera_sequence_sha256"] = hashlib.sha256(
                 np.asarray(experiment["camera_sequence"], dtype="<i8").tobytes()
             ).hexdigest()

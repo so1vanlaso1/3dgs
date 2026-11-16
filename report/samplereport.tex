@@ -1,0 +1,228 @@
+% =====================================================================
+% REUSABLE LATEX REPORT TEMPLATE
+% Preserves the formatting of the supplied report, without its content.
+% Compile with pdfLaTeX (twice for the page numbers and table of contents).
+% Optional: Put a file named logo.png beside this .tex file.
+% =====================================================================
+\documentclass[a4paper]{article}
+
+
+% --- Same page setup and packages as the original report ---
+\usepackage{a4wide,amssymb,epsfig,latexsym,multicol,array,hhline,fancyhdr}
+\usepackage{blindtext}
+\usepackage[export]{adjustbox}
+\usepackage{float}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\newcommand{\UpperErrors}{532}
+\newcommand{\UpperErrorPercent}{66.0}
+\newcommand{\SharedErrors}{389}
+\newcommand{\MlpOnly}{360}
+\newcommand{\LstmOnly}{358}
+\usepackage{tabularx,booktabs,enumitem}
+\usepackage[backend=biber,style=numeric,sorting=none]{biblatex}
+\usepackage{geometry}
+\geometry{top=3cm,bottom=3cm,left=2cm,right=2cm}
+\IfFileExists{cite.bib}{\addbibresource{cite.bib}}{}
+\setlist{itemsep=1pt,topsep=1pt}
+
+
+% --- Original syntax-highlighting style ---
+\usepackage{listings}
+\usepackage{xcolor}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+
+\usepackage{amsmath}
+\usepackage{lastpage}
+\usepackage[lined,boxed,commentsnumbered]{algorithm2e}
+\newlist{tabenum}{enumerate}{1}
+\setlist[tabenum,1]{label*=\arabic*.,nosep,leftmargin=1.2em,itemsep=0pt,topsep=0pt,parsep=0pt,before=\vspace{-\baselineskip},after=\vspace{-\baselineskip}}
+\usepackage{color}
+\usepackage{caption}
+\usepackage{multirow}
+\usepackage{rotating}
+\usepackage{graphics}
+\usepackage{setspace}
+\usepackage{tikz}
+\usetikzlibrary{arrows,snakes,backgrounds}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+\usepackage{indentfirst}
+\usepackage{longtable}
+
+
+% --- Edit ONLY these fields to reuse this template ---
+\newcommand{\UniversityLineOne}{VIETNAM NATIONAL UNIVERSITY HO CHI MINH CITY}
+\newcommand{\UniversityLineTwo}{HO CHI MINH CITY UNIVERSITY OF TECHNOLOGY}
+\newcommand{\FacultyName}{FACULTY OF COMPUTER SCIENCE AND ENGINEERING}
+\newcommand{\ReportCourse}{Specialized Project (CO4029)}
+\newcommand{\ReportTitle}{}
+\newcommand{\LecturerName}{Le Thanh Sach}
+\newcommand{\ClassName}{CC01}
+\newcommand{\TeamName}{G-09}
+\newcommand{\CourseFooter}{CO3133 -- HK261}
+\newcommand{\ReportCity}{Ho Chi Minh}
+\newcommand{\ReportMonthYear}{10/2026}
+\newcommand{\LogoFile}{figures/hcmut-logo.png}
+
+
+% --- Same document labels ---
+\AtBeginDocument{\renewcommand*\contentsname{TABLE OF CONTENTS}}
+\AtBeginDocument{\renewcommand*\refname{References}}
+
+
+% --- Same header and footer alignment, fonts, and rules ---
+\setlength{\headheight}{40pt}
+\pagestyle{fancy}
+\fancyhead{}
+\fancyhead[L]{%
+ \begin{tabular}{rl}
+    \begin{picture}(25,15)(0,0)
+       \IfFileExists{\LogoFile}{\put(0,-8){\includegraphics[width=8mm,height=8mm]{\LogoFile}}}{}
+    \end{picture}&
+    \begin{tabular}{l}
+       \textbf{\ttfamily\UniversityLineTwo}\\
+       \textbf{\ttfamily\FacultyName}
+    \end{tabular}
+ \end{tabular}
+}
+\fancyhead[R]{\begin{tabular}{l}\tiny\bfseries\\\tiny\bfseries\end{tabular}}
+\fancyfoot{}
+\fancyfoot[L]{\scriptsize\ttfamily\CourseFooter}
+\fancyfoot[R]{\scriptsize\ttfamily Page {\thepage}/\pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\footrulewidth}{0.3pt}
+
+
+% --- Same heading numbering and a fourth level for detailed subsections ---
+\setcounter{secnumdepth}{4}
+\setcounter{tocdepth}{2}
+\makeatletter
+\newcounter{subsubsubsection}[subsubsection]
+\renewcommand\thesubsubsubsection{\thesubsubsection.\alph{subsubsubsection}}
+\newcommand\subsubsubsection{\@startsection{subsubsubsection}{4}{\z@}%
+  {-3.25ex\@plus -1ex \@minus -.2ex}%
+  {1.5ex \@plus .2ex}{\normalfont\normalsize\bfseries}}
+\newcommand*\l@subsubsubsection{\@dottedtocline{3}{10.0em}{4.1em}}
+\newcommand*{\subsubsubsectionmark}[1]{}
+\makeatother
+% --- Preserve original graphic behavior with a placeholder if missing ---
+\makeatletter
+\newcommand{\reportgraphic}[2][]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{%
+    \begingroup
+    \setkeys{Gin}{#1}%
+    \ifx\Gin@ewidth\Gin@exclamation
+      \let\reportgraphicwidth\linewidth
+    \else
+      \let\reportgraphicwidth\Gin@ewidth
+    \fi
+    \fbox{\parbox[c][0.18\textheight][c]{\dimexpr\reportgraphicwidth-2\fboxsep-2\fboxrule\relax}{%
+       \centering\small [Insert image here]}}
+    \endgroup
+  }%
+}
+\makeatother
+
+
+% =====================================================================
+% DOCUMENT
+% =====================================================================
+\begin{document}
+\renewcommand{\arraystretch}{1.1}
+\setlength{\parskip}{3pt}
+\setlength{\parindent}{0pt}
+
+
+% --- Same cover-page structure and vertical spacing ---
+\begin{titlepage}
+\begin{center}
+\normalsize{\textbf{\UniversityLineOne}\\[1mm]
+\textbf{\UniversityLineTwo}\\[1mm]
+\textbf{\FacultyName}}
+\end{center}
+
+
+\vspace{1cm}
+\begin{figure}[H]
+\begin{center}
+\IfFileExists{\LogoFile}{\includegraphics[width=3cm]{\LogoFile}}{%
+  \fbox{\parbox[c][3cm][c]{3cm}{\centering\small [LOGO]}}}
+\end{center}
+\end{figure}
+\vspace{1cm}
+
+
+\begin{center}
+\begin{tabular}{c}
+\multicolumn{1}{l}{\textbf{{\Large\ReportCourse}}}\\
+~~\\
+\hline
+\\
+\multicolumn{1}{l}{\textbf{{\large\ReportTitle}}}\\
+\\
+\hline
+\end{tabular}
+\end{center}
+
+
+\begin{center}
+\begin{tabular}{l l l l}
+\textbf{Lecturer} & \LecturerName & & \\
+\textbf{Class} & \ClassName & & \\
+\textbf{Team} & \TeamName & & \\
+\textbf{Students} & Nguyen Vu Long & 2352696 & long.nguyenty@hcmut.edu.vn \\
+                 & Le Phuoc Vu &  2353341 & vu.lephuocvu13@hcmut.edu.vn \\
+                 & Nguyen Hoang Quoc & 2353027 & quoc.nguyenhoang2305@hcmut.edu.vn \\
+% Add or remove student rows above as needed.
+\end{tabular}
+\end{center}
+
+
+\vspace{2cm}
+\begin{center}
+{\footnotesize\textbf{\ReportCity, \ReportMonthYear}}
+\end{center}
+\end{titlepage}
+
+
+% --- Same automatically generated table of contents ---
+\begingroup
+\small
+\setlength{\parskip}{0pt}
+\tableofcontents
+\endgroup
+\newpage
+\renewcommand{\labelitemi}{\raisebox{0.3ex}{\scriptsize$\bullet$}}
+
+
+% =====================================================================
+% EDIT THE SECTION HEADINGS AND REPLACE ALL BRACKETED PLACEHOLDERS.
+% Add/remove sections freely; the typography and page design stay the same.
+% =====================================================================
+
+
+\end{document}

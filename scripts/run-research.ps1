@@ -1,7 +1,9 @@
 param(
-    [ValidateSet('campaign','ccd','test')][string]$Mode = 'campaign',
+    [ValidateSet('campaign','ccd','test','a05','a05-train')][string]$Mode = 'campaign',
     [string]$OutputRoot = 'results/research_completion_20261027',
-    [switch]$Smoke
+    [switch]$Smoke,
+    [ValidateSet('residual','absgrad','a04')][string]$Variant = 'residual',
+    [ValidateSet(42,43,44)][int]$Seed = 42
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -29,6 +31,11 @@ $env:PYTHONUNBUFFERED = '1'
 $env:TQDM_MININTERVAL = '30'
 if ($Mode -eq 'test') {
     & $python -m pytest tests/test_long_axis_split.py tests/test_budget_strategy.py -q
+} elseif ($Mode -in @('a05','a05-train')) {
+    $runArgs = @('scripts/research_a05.py', '--root', $OutputRoot)
+    if ($Smoke) { $runArgs += '--smoke' }
+    if ($Mode -eq 'a05-train') { $runArgs += @('--train', '--variant', $Variant, '--seed', $Seed) }
+    & $python -u @runArgs
 } elseif ($Mode -eq 'ccd') {
     $runArgs = @('scripts/ccd_mechanism.py', '--root', "$OutputRoot/ccd")
     if ($Smoke) { $runArgs += '--smoke' }

@@ -140,6 +140,86 @@ def test_split_adds_one_net_gaussian_and_can_underfill():
         assert state[key].shape == (5,)
 
 
+@pytest.mark.parametrize("rank,extra_parent", [("gradient", 1), ("residual", 2)])
+def test_fallback_uses_vacant_slots_after_ordinary_growth(rank, extra_parent):
+    strategy = BudgetStrategy(
+        cap_max=7, refine_start_iter=0, refine_stop_iter=2, refine_every=1,
+        split_mode="long_axis", fallback_rank=rank, fallback_start_iter=1,
+        fallback_max=1,
+    )
+    params, optimizers = make_params(5)
+    params["means"].data[:, 1] = torch.arange(5)
+    params["opacities"].data[4] = -10
+    state = strategy.initialize_state()
+    strategy._ensure_state(params, state)
+    state.update(
+        grad2d=torch.tensor([0.0003, 0.00018, 0.0001, 0.00019, 0.00019]),
+        count=torch.ones(5),
+    )
+    state["fallback_views"][:] = torch.tensor([3, 3, 3, 2, 3])
+    state["fallback_error"][:] = torch.tensor([1., 2., 9., 40., 40.])
+    assert strategy._grow_gs(params, optimizers, state, 1) == (0, 2)
+    assert sorted(params["means"][-4:, 1].tolist()) == [0, 0, extra_parent, extra_parent]
+    assert state["growth_history"][-1]["fallback_added"] == 1
+    assert len(params["means"]) == strategy.cap_max
+    assert not state["fallback_views"].any()
+    assert not state["fallback_error"].any()
+
+
+def test_fallback_counts_only_new_cameras_without_changing_base_observations(monkeypatch):
+    monkeypatch.setattr(
+        "gsplat.strategy.budget.rasterize_top_contributing_gaussian_ids",
+        lambda **kwargs: (torch.tensor([[[[0]]]]), torch.ones(1, 1, 1, 1)),
+    )
+    params, _ = make_params(1)
+    strategy = BudgetStrategy(
+        fallback_rank="residual", fallback_start_iter=1, score_every=1,
+        refine_start_iter=0,
+    )
+    state = strategy.initialize_state()
+    info = dict.fromkeys(("conics", "opacities", "means2d"), torch.empty(0))
+    info.update(
+        isect_offsets=None, flatten_ids=None, width=1, height=1,
+        tile_size=16, gaussian_ids=None,
+    )
+    rgb = torch.ones(1, 1, 1, 3)
+    for step, camera in enumerate((5, 5, 9), start=1):
+        strategy.observe_image(
+            params, state, step, info, rgb, torch.zeros_like(rgb), camera_ids=[camera]
+        )
+    assert state["score_count"].item() == 3
+    assert state["error_mass"].item() == 3
+    assert state["fallback_views"].item() == 2
+    assert state["fallback_error"].item() == 2
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
+@pytest.mark.parametrize("packed", [True, False])
+def test_absgrad_recovers_cancelled_pixel_gradients_in_budget_strategy(packed):
+    from gsplat.rendering import rasterization
+
+    params, optimizers = make_params(1, "cuda")
+    params["means"].data[0, 2] = 3
+    params["scales"].data.fill_(-2)
+    params["colors"].data.fill_(0.5)
+    strategy = BudgetStrategy(absgrad=True, grow_grad2d=0.0008)
+    state = strategy.initialize_state()
+    colors, _, info = rasterization(
+        means=params["means"], quats=params["quats"],
+        scales=params["scales"].exp(), opacities=params["opacities"].sigmoid(),
+        colors=params["colors"], viewmats=torch.eye(4, device="cuda")[None],
+        Ks=torch.tensor([[[30., 0., 8.], [0., 30., 8.], [0., 0., 1.]]], device="cuda"),
+        width=16, height=16, packed=packed, absgrad=True,
+    )
+    strategy.step_pre_backward(params, optimizers, state, 0, info)
+    # Symmetric pixels cancel the signed positional gradient at the image center.
+    colors.mean().backward()
+    signed = info["means2d"].grad.norm().item() * 8
+    strategy._update_state(params, state, info, packed=packed)
+    absolute = (state["grad2d"] / state["count"]).item()
+    assert signed < strategy.grow_grad2d < absolute
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 def test_packed_and_dense_error_attribution_agree():
     from gsplat.rendering import rasterization

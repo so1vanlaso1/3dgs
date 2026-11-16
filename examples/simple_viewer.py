@@ -313,6 +313,7 @@ def main(local_rank: int, world_rank, world_size: int, args):
         return renders
 
     server = viser.ViserServer(port=args.port, verbose=False)
+    capture_path = None
     if args.camera_data_dir is not None:
         from datasets.colmap import Parser
 
@@ -328,6 +329,11 @@ def main(local_rank: int, world_rank, world_size: int, args):
         server.initial_camera.up = -c2w[:3, 1]
         server.initial_camera.fov = 2 * math.atan(image_height / (2 * fy))
         print(f"Initial view: {parser.image_names[args.camera_index]}")
+        from capture_path import CapturePath
+
+        if len(parser.image_names) >= 2:
+            capture_path = CapturePath(parser, manifest=args.capture_manifest, fps=args.capture_fps)
+            print(f"Capture replay: {len(capture_path.names)} poses, {capture_path.duration:.2f}s; {capture_path.timing_source}")
     viewer_kwargs = dict(
         server=server,
         render_fn=viewer_render_fn,
@@ -336,9 +342,19 @@ def main(local_rank: int, world_rank, world_size: int, args):
     )
     if args.use_gaussian_render_inference_scene:
         viewer_kwargs["render_modes"] = ("rgb",)
-    _ = GsplatViewer(**viewer_kwargs)
+    viewer = GsplatViewer(**viewer_kwargs)
+    playback = None
+    if capture_path is not None:
+        from capture_path import CapturePlayback
+
+        playback = CapturePlayback(server, capture_path)
     print("Viewer running... Ctrl+C to exit.")
-    time.sleep(100000)
+    while True:
+        if playback is not None:
+            playback.tick()
+        # Camera-driven rendering must remain active when route replay is paused.
+        viewer.refresh_camera_views()
+        time.sleep(1 / 15)
 
 
 if __name__ == "__main__":
@@ -374,6 +390,10 @@ if __name__ == "__main__":
         "--port", type=int, default=8080, help="port for the viewer server"
     )
     parser.add_argument("--camera_index", type=int, default=0, help="initial registered image index")
+    parser.add_argument("--capture_manifest", type=str, default=None,
+                        help="capture timestamp manifest; otherwise search dataset ancestors")
+    parser.add_argument("--capture_fps", type=float, default=15.0,
+                        help="estimated capture FPS only when no matching timestamp manifest exists")
     parser.add_argument(
         "--with_ut", action="store_true", help="use uncentered transform"
     )

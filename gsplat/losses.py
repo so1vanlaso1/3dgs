@@ -219,9 +219,49 @@ def depth_l1_loss(
     Returns:
         Scalar disparity L1 loss.
     """
-    disp = torch.where(pred_depth > 0.0, 1.0 / pred_depth, torch.zeros_like(pred_depth))
-    disp_gt = torch.where(gt_depth > 0.0, 1.0 / gt_depth, torch.zeros_like(gt_depth))
+    # Mask the input before taking a reciprocal: torch.where evaluates both
+    # branches, so 1/0 in the unselected branch poisons the backward pass.
+    valid_pred = torch.isfinite(pred_depth) & (pred_depth > 0.0)
+    valid_gt = torch.isfinite(gt_depth) & (gt_depth > 0.0)
+    safe_pred = torch.where(valid_pred, pred_depth, torch.ones_like(pred_depth))
+    safe_gt = torch.where(valid_gt, gt_depth, torch.ones_like(gt_depth))
+    disp = torch.where(valid_pred, safe_pred.reciprocal(), torch.zeros_like(pred_depth))
+    disp_gt = torch.where(valid_gt, safe_gt.reciprocal(), torch.zeros_like(gt_depth))
     return F.l1_loss(disp, disp_gt) * scene_scale
+
+
+def confidence_depth_l1_loss(
+    pred_depth: Tensor, gt_depth: Tensor, confidence: Tensor,
+    scene_scale: float = 1.0,
+) -> Tensor:
+    """Normalize disparity L1 over finite positive weighted sensor observations.
+
+    Zero confidence and absent/invalid sensor depths contribute nothing. Invalid
+    rendered depths retain the historical zero-disparity penalty. An empty frame
+    returns a differentiable zero. Confidence is evidence weight, not certainty.
+    """
+    if pred_depth.shape != gt_depth.shape or confidence.shape != gt_depth.shape:
+        raise ValueError("Depth and confidence tensors must have matching shapes")
+    valid = torch.isfinite(gt_depth) & (gt_depth > 0)
+    valid &= torch.isfinite(confidence) & (confidence > 0)
+    weights = torch.where(valid, confidence, torch.zeros_like(confidence))
+    safe_gt = torch.where(valid, gt_depth, torch.ones_like(gt_depth))
+    safe_pred = torch.nan_to_num(pred_depth, nan=0., posinf=0., neginf=0.)
+    positive = safe_pred > 0
+    disp = torch.where(positive, safe_pred.clamp_min(1e-8).reciprocal(), torch.zeros_like(safe_pred))
+    error = (disp - safe_gt.reciprocal()).abs()
+    return (error * weights).sum() / weights.sum().clamp_min(1e-8) * scene_scale
+
+
+def sensor_coverage_loss(alpha: Tensor, gt_depth: Tensor, confidence: Tensor) -> Tensor:
+    """Optional opacity prior only at positively supported sensor observations."""
+    if alpha.shape != gt_depth.shape or confidence.shape != gt_depth.shape:
+        raise ValueError("Alpha, depth and confidence must have matching shapes")
+    valid = torch.isfinite(gt_depth) & (gt_depth > 0)
+    valid &= torch.isfinite(confidence) & (confidence > 0)
+    weights = torch.where(valid, confidence, torch.zeros_like(confidence))
+    safe_alpha = torch.nan_to_num(alpha, nan=0., posinf=0., neginf=0.)
+    return ((1 - safe_alpha).clamp_min(0) * weights).sum() / weights.sum().clamp_min(1e-8)
 
 
 def binocular_disparity_l1(

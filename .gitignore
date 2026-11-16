@@ -64,7 +64,12 @@ coverage.xml
 *.log
 local_settings.py
 db.sqlite3
+
+# Local sensor recordings and SQLite sidecars
 *.db3
+*.db3-journal
+*.db3-shm
+*.db3-wal
 
 # Flask stuff:
 instance/
@@ -93,6 +98,8 @@ celerybeat-schedule
 
 # Environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -128,10 +135,19 @@ venv.bak/
 compile_commands.json
 *.dump
 
-data
-results
+# Local datasets, training runs, and generated research evidence.
+# Committed benchmark tables and stage manifests live outside these paths.
+/data/
+/results/
+/stage_result/*/data/
 
-!examples/benchmarks/compression/results/
+# LaTeX intermediates. Keep source and explicitly exported report PDFs.
+/report/**/*.aux
+/report/**/*.fdb_latexmk
+/report/**/*.fls
+/report/**/*.out
+/report/**/*.synctex.gz
+/report/**/*.toc
 
 # Generated/shareable HTML preview of the planning markdown — kept locally only.
 planning/*.html

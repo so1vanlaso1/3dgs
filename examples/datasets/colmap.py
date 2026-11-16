@@ -555,14 +555,19 @@ class Dataset:
                 # Samples use COLMAP world units before parser normalization.
                 scale = np.linalg.norm(self.parser.transform[:3, 0])
                 depths = samples["depths"].copy() * scale
+                confidence = (samples["confidence"].copy() if "confidence" in samples
+                              else np.ones_like(depths))
+                if confidence.shape != depths.shape or not np.isfinite(confidence).all():
+                    raise ValueError(f"Invalid sensor confidence for {image_name}")
+                if np.any((confidence < 0) | (confidence > 1)):
+                    raise ValueError(f"Sensor confidence must be in [0, 1]: {image_name}")
             valid = (np.isfinite(points).all(axis=1) & np.isfinite(depths)
                      & (depths > 0) & (points[:, 0] >= 0)
                      & (points[:, 0] < image.shape[1]) & (points[:, 1] >= 0)
                      & (points[:, 1] < image.shape[0]))
-            if not valid.any():
-                raise ValueError(f"No valid sensor depth for {image_name}")
             data["points"] = torch.from_numpy(points[valid]).float()
             data["depths"] = torch.from_numpy(depths[valid]).float()
+            data["depth_confidence"] = torch.from_numpy(confidence[valid]).float()
         elif self.load_depths:
             # projected points to image plane to get depths
             worldtocams = np.linalg.inv(camtoworlds)
