@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import json
+import hashlib
 import math
 import os
 import time
@@ -39,6 +40,8 @@ from datasets.traj import (
     generate_spiral_path,
 )
 from gsplat.losses import (
+    confidence_depth_l1_loss,
+    sensor_coverage_loss,
     depth_l1_loss,
     l1_loss,
     opacity_reg_loss,
@@ -71,12 +74,19 @@ except ModuleNotFoundError as e:
     ) from e
 from gsplat.cuda._wrapper import CameraModel
 from gsplat.strategy import BudgetStrategy, DefaultStrategy, MCMCStrategy
+from gsplat.surface import surface_depth_loss
 from gsplat_viewer import GsplatViewer, GsplatRenderTabState
 from nerfview import CameraState, RenderTabState, apply_float_colormap
 
 
 @dataclass
 class Config:
+    # Experiment seed; independent_sampling isolates camera order from split RNG.
+    seed: int = 42
+    independent_sampling: bool = False
+    # Replay a saved list of training-set image indices for paired experiments.
+    camera_sequence_path: Optional[str] = None
+    record_experiment: bool = False
     # Disable viewer
     disable_viewer: bool = False
     # Path to the .pt files. If provide, it will skip training and run evaluation only.
@@ -143,6 +153,8 @@ class Config:
     # memory, instead of decoding one image per step (COLMAP data only). Costs
     # the decoded training set in host memory on every rank.
     cache_images: bool = False
+    # Zero avoids Windows worker spawning and duplicated dataset state.
+    data_workers: int = 4
     # Steps to evaluate the model
     eval_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
     # Steps to save the model
@@ -252,6 +264,15 @@ class Config:
     depth_loss: bool = False
     # Weight for depth loss
     depth_lambda: float = 1e-2
+    # Weight sensor observations by their per-sample evidence confidence.
+    depth_confidence: bool = False
+    # Optional opacity prior at supported sensor-depth observations only.
+    sensor_alpha_lambda: float = 0.0
+    # Experimental edge-aware curvature prior on expected rendered log-depth.
+    surface_lambda: float = 0.0
+    surface_start: int = 3000
+    # Explicit opt-in to calibrated sensor samples, in pre-normalization COLMAP units.
+    sensor_depth_dir: Optional[str] = None
 
     # Dump information to tensorboard every this steps
     tb_every: int = 100
@@ -388,7 +409,7 @@ class Runner:
     def __init__(
         self, local_rank: int, world_rank, world_size: int, cfg: Config
     ) -> None:
-        set_random_seed(42 + local_rank)
+        set_random_seed(cfg.seed + local_rank)
 
         self.cfg = cfg
         self.world_rank = world_rank
@@ -413,6 +434,12 @@ class Runner:
         self.writer = SummaryWriter(log_dir=f"{cfg.result_dir}/tb")
 
         # Load data: Training data should contain initial points and colors.
+        if cfg.sensor_depth_dir and (not cfg.depth_loss or cfg.data_type != "colmap"):
+            raise ValueError("sensor_depth_dir requires depth_loss and the colmap backend")
+        if cfg.depth_confidence and not cfg.sensor_depth_dir:
+            raise ValueError("depth_confidence requires sensor_depth_dir")
+        if cfg.sensor_alpha_lambda < 0 or (cfg.sensor_alpha_lambda and not cfg.depth_confidence):
+            raise ValueError("sensor_alpha_lambda must be nonnegative and requires depth_confidence")
         if cfg.data_type == "ncore":
             if cfg.cache_images:
                 raise ValueError("cache_images is not supported for NCore data.")
@@ -459,6 +486,7 @@ class Runner:
                 split="train",
                 patch_size=cfg.patch_size,
                 load_depths=cfg.depth_loss,
+                sensor_depth_dir=cfg.sensor_depth_dir,
             )
             self.valset = Dataset(self.parser, split="val")
         self.scene_scale = self.parser.scene_scale * 1.1 * cfg.global_scale
@@ -813,6 +841,15 @@ class Runner:
         device = self.device
         world_rank = self.world_rank
         world_size = self.world_size
+        experiment = None
+        if cfg.record_experiment:
+            digest = hashlib.sha256()
+            for key, tensor in sorted(self.splats.items()):
+                digest.update(key.encode())
+                digest.update(tensor.detach().cpu().contiguous().numpy().tobytes())
+            experiment = {"seed": cfg.seed, "initial_sha256": digest.hexdigest(),
+                          "independent_sampling": cfg.independent_sampling,
+                          "camera_sequence": []}
 
         # Dump cfg.
         if world_rank == 0:
@@ -863,13 +900,19 @@ class Runner:
         if cfg.cache_images:
             # before the loader starts its workers, which then share the cache
             self.trainset.preload_images()
+        loader_generator = None
+        if cfg.independent_sampling:
+            loader_generator = torch.Generator().manual_seed(cfg.seed + 104729)
         trainloader = torch.utils.data.DataLoader(
             self.trainset,
             batch_size=cfg.batch_size,
-            shuffle=True,
-            num_workers=4,
-            persistent_workers=True,
+            shuffle=cfg.camera_sequence_path is None,
+            sampler=(json.loads(Path(cfg.camera_sequence_path).read_text())
+                     if cfg.camera_sequence_path is not None else None),
+            num_workers=cfg.data_workers,
+            persistent_workers=cfg.data_workers > 0,
             pin_memory=True,
+            generator=loader_generator,
         )
         trainloader_iter = iter(trainloader)
 
@@ -906,6 +949,8 @@ class Runner:
                 pixels.shape[0] * pixels.shape[1] * pixels.shape[2]
             )
             image_ids = data["image_id"].to(device)
+            if experiment is not None:
+                experiment["camera_sequence"].extend(data["image_id"].tolist())
             masks = data["mask"].to(device) if "mask" in data else None  # [1, H, W]
             exposure = (
                 data["exposure"].to(device) if "exposure" in data else None
@@ -936,7 +981,7 @@ class Runner:
                 near_plane=cfg.near_plane,
                 far_plane=cfg.far_plane,
                 image_ids=image_ids,
-                render_mode="RGB+ED" if cfg.depth_loss else "RGB",
+                render_mode="RGB+ED" if (cfg.depth_loss or cfg.surface_lambda > 0) else "RGB",
                 masks=masks,
                 frame_idcs=image_ids,
                 camera_idcs=data["camera_idx"].to(device),
@@ -969,7 +1014,9 @@ class Runner:
                 and not self._gaussians_frozen
             ):
                 self.cfg.strategy.observe_image(
-                    self.splats, self.strategy_state, step, info, colors, pixels, masks
+                    self.splats, self.strategy_state, step, info, colors, pixels, masks,
+                    camera_ids=data["image_id"].tolist()
+                    if self.cfg.strategy.fallback_rank != "off" else None,
                 )
             if masks is not None:
                 # Exclude masked pixels (e.g. ego vehicle) from L1.
@@ -986,6 +1033,11 @@ class Runner:
                 colors_ssim.permute(0, 3, 1, 2), pixels_ssim.permute(0, 3, 1, 2)
             )
             loss = torch.lerp(l1loss, ssimloss, cfg.ssim_lambda)
+            if cfg.surface_lambda > 0 and step >= cfg.surface_start:
+                surface_loss = surface_depth_loss(depths, pixels, alphas, masks)
+                loss = loss + cfg.surface_lambda * surface_loss
+                if step % cfg.tb_every == 0:
+                    self.writer.add_scalar("train/surface_loss", surface_loss.item(), step)
             if cfg.depth_loss:
                 # query depths from depth map
                 points = torch.stack(
@@ -996,15 +1048,25 @@ class Runner:
                     dim=-1,
                 )  # normalize to [-1, 1]
                 grid = points.unsqueeze(2)  # [1, M, 1, 2]
-                depths = F.grid_sample(
+                sampled_depths = F.grid_sample(
                     depths.permute(0, 3, 1, 2), grid, align_corners=True
-                )  # [1, 1, M, 1]
-                depths = depths.squeeze(3).squeeze(1)  # [1, M]
+                ).squeeze(3).squeeze(1) if points.shape[1] else depths.sum().reshape(1, 1)[:, :0]
                 # calculate loss in disparity space
-                depthloss = depth_l1_loss(
-                    depths, depths_gt, scene_scale=self.scene_scale
-                )
+                if cfg.depth_confidence:
+                    depthloss = confidence_depth_l1_loss(
+                        sampled_depths, depths_gt, data["depth_confidence"].to(device),
+                        scene_scale=self.scene_scale)
+                elif sampled_depths.numel():
+                    depthloss = depth_l1_loss(sampled_depths, depths_gt, scene_scale=self.scene_scale)
+                else:
+                    depthloss = depths.sum() * 0.
                 loss += depthloss * cfg.depth_lambda
+                if cfg.sensor_alpha_lambda:
+                    sampled_alpha = F.grid_sample(
+                        alphas.permute(0, 3, 1, 2), grid, align_corners=True
+                    ).squeeze(3).squeeze(1) if points.shape[1] else alphas.sum().reshape(1, 1)[:, :0]
+                    loss += cfg.sensor_alpha_lambda * sensor_coverage_loss(
+                        sampled_alpha, depths_gt, data["depth_confidence"].to(device))
             if cfg.post_processing == "bilateral_grid":
                 post_processing_reg_loss = 10 * total_variation_loss(
                     self.post_processing_module.grids
@@ -1227,6 +1289,27 @@ class Runner:
                 # Update the scene.
                 self.viewer.update(step, num_train_rays_per_step)
 
+        if experiment is not None:
+            nonfinite = {name: int((~torch.isfinite(value)).sum().item())
+                         for name, value in self.splats.items()
+                         if not torch.isfinite(value).all()}
+            experiment["finite_parameters"] = not nonfinite
+            if nonfinite:
+                experiment["failure"] = {"reason": "nonfinite_final_parameters", "counts": nonfinite}
+                with open(Path(cfg.result_dir) / "experiment_failed.json", "w") as stream:
+                    json.dump(experiment, stream, indent=2)
+                raise FloatingPointError(f"Non-finite final Gaussian parameters: {nonfinite}")
+            experiment["camera_sequence_sha256"] = hashlib.sha256(
+                np.asarray(experiment["camera_sequence"], dtype="<i8").tobytes()
+            ).hexdigest()
+            experiment["completed_updates"] = max_steps
+            experiment["final_count"] = len(self.splats["means"])
+            with open(Path(cfg.result_dir) / "experiment.json", "w") as stream:
+                json.dump(experiment, stream, indent=2)
+            # Unlike the historical checkpoint, this captures the final update.
+            torch.save({"step": max_steps - 1, "splats": self.splats.state_dict()},
+                       Path(self.ckpt_dir) / "final_post_update.pt")
+
     @torch.no_grad()
     def eval(self, step: int, stage: str = "val"):
         """Entry for evaluation."""
@@ -1237,7 +1320,7 @@ class Runner:
         world_size = self.world_size
 
         valloader = torch.utils.data.DataLoader(
-            self.valset, batch_size=1, shuffle=False, num_workers=1
+            self.valset, batch_size=1, shuffle=False, num_workers=min(1, cfg.data_workers)
         )
         ellipse_time = 0
         metrics = defaultdict(list)

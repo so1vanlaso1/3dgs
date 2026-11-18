@@ -450,13 +450,30 @@ class Dataset:
         split: str = "train",
         patch_size: Optional[int] = None,
         load_depths: bool = False,
+        sensor_depth_dir: Optional[str] = None,
     ):
         self.parser = parser
         self.split = split
         self.patch_size = patch_size
         self.load_depths = load_depths
+        self.sensor_depth_dir = sensor_depth_dir
+        if sensor_depth_dir and (patch_size is not None or parser.factor != 1):
+            raise ValueError("Sensor samples require factor=1 and uncropped pinhole images")
+        if sensor_depth_dir and any(len(p) for p in parser.params_dict.values()):
+            raise ValueError("Sensor samples must match already undistorted pinhole images")
         indices = np.arange(len(self.parser.image_names))
-        if split == "train":
+        explicit_split = Path(self.parser.data_dir) / "experiment_split.json"
+        if explicit_split.exists():
+            import json
+            names = json.loads(explicit_split.read_text(encoding="utf-8"))
+            train_names, val_names = set(names["train"]), set(names["val"])
+            if train_names & val_names:
+                raise ValueError("Experiment train and validation images overlap")
+            wanted = train_names if split == "train" else val_names
+            self.indices = np.array([i for i in indices if self.parser.image_names[i] in wanted], dtype=int)
+            if not len(self.indices):
+                raise ValueError(f"No registered images in experiment split {split}")
+        elif split == "train":
             self.indices = indices[indices % self.parser.test_every != 0]
         else:
             self.indices = indices[indices % self.parser.test_every == 0]
@@ -531,7 +548,27 @@ class Dataset:
         if exposure is not None:
             data["exposure"] = torch.tensor(exposure, dtype=torch.float32)
 
-        if self.load_depths:
+        if self.load_depths and self.sensor_depth_dir:
+            image_name = self.parser.image_names[index]
+            with np.load(Path(self.sensor_depth_dir) / (image_name + ".npz")) as samples:
+                points = samples["points"].copy()
+                # Samples use COLMAP world units before parser normalization.
+                scale = np.linalg.norm(self.parser.transform[:3, 0])
+                depths = samples["depths"].copy() * scale
+                confidence = (samples["confidence"].copy() if "confidence" in samples
+                              else np.ones_like(depths))
+                if confidence.shape != depths.shape or not np.isfinite(confidence).all():
+                    raise ValueError(f"Invalid sensor confidence for {image_name}")
+                if np.any((confidence < 0) | (confidence > 1)):
+                    raise ValueError(f"Sensor confidence must be in [0, 1]: {image_name}")
+            valid = (np.isfinite(points).all(axis=1) & np.isfinite(depths)
+                     & (depths > 0) & (points[:, 0] >= 0)
+                     & (points[:, 0] < image.shape[1]) & (points[:, 1] >= 0)
+                     & (points[:, 1] < image.shape[0]))
+            data["points"] = torch.from_numpy(points[valid]).float()
+            data["depths"] = torch.from_numpy(depths[valid]).float()
+            data["depth_confidence"] = torch.from_numpy(confidence[valid]).float()
+        elif self.load_depths:
             # projected points to image plane to get depths
             worldtocams = np.linalg.inv(camtoworlds)
             image_name = self.parser.image_names[index]

@@ -15,10 +15,12 @@
 # limitations under the License.
 
 import viser
+import numpy as np
 from pathlib import Path
 from typing import Literal
 from typing import Tuple, Callable
 from nerfview import Viewer, RenderTabState
+from nerfview._renderer import RenderTask
 
 from gsplat.rendering import RasterizeMode
 from gsplat.cuda._wrapper import CameraModel
@@ -64,8 +66,30 @@ class GsplatViewer(Viewer):
         if len(render_modes) == 0:
             raise ValueError("render_modes must contain at least one mode")
         self._render_modes = render_modes
+        self._camera_snapshots = {}
         super().__init__(server, render_fn, output_dir, mode)
         server.gui.set_panel_label("gsplat viewer")
+
+    def refresh_camera_views(self):
+        """Recover missed move callbacks without rendering unchanged cameras.
+
+        Call from the standalone viewer loop, independently of route playback.
+        The renderer coalesces move requests and refines to full quality at rest.
+        """
+        clients = self.server.get_clients()
+        for client_id in tuple(self._camera_snapshots):
+            if client_id not in clients:
+                self._camera_snapshots.pop(client_id, None)
+        for client_id, client in clients.items():
+            renderer = self._renderers.get(client_id)
+            if renderer is None:
+                continue
+            camera = self.get_camera_state(client)
+            snapshot = np.concatenate((camera.c2w.ravel(), [camera.fov, camera.aspect]))
+            previous = self._camera_snapshots.get(client_id)
+            if previous is None or not np.array_equal(snapshot, previous):
+                self._camera_snapshots[client_id] = snapshot.copy()
+                renderer.submit(RenderTask("move", camera))
 
     def _init_rendering_tab(self):
         self.render_tab_state = GsplatRenderTabState()

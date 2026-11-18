@@ -38,10 +38,23 @@ class BudgetStrategy(DefaultStrategy):
     split_mode: Literal["random", "long_axis"] = "random"
     split_distance: float = 0.45
     opacity_reduction: float = 0.6
+    # Separate child generation from the treatment of normally cloned parents.
+    clone_policy: Literal["method_default", "clone", "split"] = "method_default"
+    # Optional second route to growth when the ordinary candidate pool underfills.
+    fallback_rank: Literal["off", "gradient", "residual"] = "off"
+    fallback_start_iter: int = 5000
+    fallback_max: int = 512
+    fallback_min_views: int = 3
 
     def __post_init__(self):
         if self.split_mode not in ("random", "long_axis"):
             raise ValueError(f"Unknown split mode: {self.split_mode}")
+        if self.clone_policy not in ("method_default", "clone", "split"):
+            raise ValueError(f"Unknown clone policy: {self.clone_policy}")
+        if self.fallback_rank not in ("off", "gradient", "residual"):
+            raise ValueError(f"Unknown fallback ranking: {self.fallback_rank}")
+        if self.fallback_start_iter < 0 or self.fallback_max < 1 or self.fallback_min_views < 1:
+            raise ValueError("Fallback start must be nonnegative and limits positive")
         if not 0 < self.split_distance <= 0.5 or not 0 < self.opacity_reduction < 1:
             raise ValueError("Require 0 < split_distance <= 0.5 and 0 < opacity_reduction < 1")
         if self.split_mode == "long_axis" and self.revised_opacity:
@@ -77,13 +90,17 @@ class BudgetStrategy(DefaultStrategy):
             state["initial_count"] = n
             for key in ("error_mass", "edge_mass", "score_count"):
                 state[key] = torch.zeros(n, device=params["means"].device)
+            if self.fallback_rank != "off":
+                state["fallback_error"] = torch.zeros_like(state["error_mass"])
+                state["fallback_views"] = torch.zeros_like(state["score_count"])
+                state["fallback_seen"] = set()
 
     def _update_state(self, params, state, info, packed=False):
         self._ensure_state(params, state)
         super()._update_state(params, state, info, packed=packed)
 
     @staticmethod
-    def _accumulate(state, ids, weights, pixel_error, pixel_edges=None):
+    def _accumulate(state, ids, weights, pixel_error, pixel_edges=None, first_views=()):
         """Accumulate global Gaussian IDs, ignoring padded/zero-weight entries."""
         weights = weights.detach()
         valid = (ids >= 0) & torch.isfinite(weights) & (weights > 0)
@@ -96,24 +113,44 @@ class BudgetStrategy(DefaultStrategy):
             state["edge_mass"].index_add_(0, gs_ids, contributions * edges)
         # Count contributing views, rather than projected visibility or pixel hits.
         observed_ids = ids.masked_fill(~valid, -1)
-        for view_ids in observed_ids:
+        for view, view_ids in enumerate(observed_ids):
             # The public image observer calls this with [C,H,W,K].
             unique_ids = view_ids[view_ids >= 0].unique().long()
             state["score_count"][unique_ids] += 1
+            if first_views and first_views[view]:
+                keep = valid[view]
+                state["fallback_views"][unique_ids] += 1
+                view_errors = pixel_error[view].detach().unsqueeze(-1).expand_as(weights[view])
+                state["fallback_error"].index_add_(
+                    0, view_ids[keep].long(), weights[view][keep] * view_errors[keep]
+                )
 
     @torch.no_grad()
-    def observe_image(self, params, state, step, info, colors, pixels, masks=None):
+    def observe_image(self, params, state, step, info, colors, pixels, masks=None, *, camera_ids=None):
         """Attribute detached pixel errors using the existing render's projections."""
         self._ensure_state(params, state)
+        # Accumulate the window leading up to the first enabled refinement.
+        track_fallback = (
+            self.fallback_rank != "off"
+            and step > self.fallback_start_iter - self.refine_every
+        )
         if (
             step < self.refine_start_iter
             or step >= self.refine_stop_iter
             or step % self.score_every
-            or (self.error_weight == 0 and self.edge_weight == 0)
+            or (self.error_weight == 0 and self.edge_weight == 0 and not track_fallback)
         ):
             return
         if colors.ndim != 4 or colors.shape != pixels.shape:
             raise ValueError("Expected matching [C,H,W,3] training images")
+        first_views = []
+        if track_fallback:
+            if camera_ids is None or len(camera_ids) != len(colors):
+                raise ValueError("Fallback scoring requires one training camera ID per image")
+            seen = state["fallback_seen"]
+            for camera_id in camera_ids:
+                first_views.append(camera_id not in seen)
+                seen.add(camera_id)
         ids, weights = rasterize_top_contributing_gaussian_ids(
             means2d=info["means2d"].detach(),
             conics=info["conics"].detach(),
@@ -140,7 +177,19 @@ class BudgetStrategy(DefaultStrategy):
             ).abs()[:, 0]
         if masks is not None:
             ids = ids.masked_fill(~masks.bool().unsqueeze(-1), -1)
-        self._accumulate(state, ids, weights, errors, edges)
+        self._accumulate(state, ids, weights, errors, edges, first_views)
+
+    def _fallback_candidates(self, state, grads, eligible, opaque):
+        views = state["fallback_views"]
+        residual = state["fallback_error"] / views.clamp_min(1)
+        supported = (
+            (views >= self.fallback_min_views) & torch.isfinite(residual) & (residual > 0)
+        )
+        candidates = (
+            ~eligible & opaque & torch.isfinite(grads)
+            & (grads <= self.grow_grad2d) & supported
+        ).nonzero().flatten()
+        return candidates, residual
 
     def target_count(self, initial_count: int, step: int) -> int:
         # Match DefaultStrategy's strict start/stop and reset-pause conditions.
@@ -186,7 +235,8 @@ class BudgetStrategy(DefaultStrategy):
         eligible = grads > self.grow_grad2d
         if step < self.refine_scale2d_stop_iter:
             eligible |= state["radii"] > self.grow_scale2d
-        eligible &= params["opacities"].sigmoid().flatten() >= self.prune_opa
+        opaque = params["opacities"].sigmoid().flatten() >= self.prune_opa
+        eligible &= opaque
         candidates = eligible.nonzero().flatten()
         additions = min(max(0, target - n), candidates.numel())
         chosen = torch.zeros(n, dtype=torch.bool, device=grads.device)
@@ -212,9 +262,24 @@ class BudgetStrategy(DefaultStrategy):
                 score[candidates].topk(additions, sorted=False).indices
             ]
             chosen[selected] = True
-        # LAS replaces cloning as well as random splitting, as in Improved-GS.
-        is_dupli = chosen & small if self.split_mode == "random" else torch.zeros_like(chosen)
-        is_split = chosen & ~small if self.split_mode == "random" else chosen.clone()
+        fallback_stats = {}
+        if self.fallback_rank != "off" and step >= self.fallback_start_iter:
+            fallback, residual = self._fallback_candidates(state, grads, eligible, opaque)
+            extra = min(self.fallback_max, max(0, target - n - additions), len(fallback))
+            if extra:
+                score = residual if self.fallback_rank == "residual" else grads
+                chosen[fallback[score[fallback].topk(extra, sorted=False).indices]] = True
+            fallback_stats = dict(
+                fallback_candidates=len(fallback),
+                fallback_added=extra,
+                fallback_distinct_cameras=len(state["fallback_seen"]),
+            )
+            additions += extra
+        replace_clones = self.clone_policy == "split" or (
+            self.clone_policy == "method_default" and self.split_mode == "long_axis"
+        )
+        is_dupli = torch.zeros_like(chosen) if replace_clones else chosen & small
+        is_split = chosen.clone() if replace_clones else chosen & ~small
         if step < self.refine_scale2d_stop_iter:
             is_split |= chosen & (state["radii"] > self.grow_scale2d)
             is_dupli &= ~is_split
@@ -234,11 +299,16 @@ class BudgetStrategy(DefaultStrategy):
         state["growth_history"].append(
             dict(step=step, before=n, target=target,
                  eligible=candidates.numel(), added=additions,
-                 duplicated=n_dupli, split=n_split, split_mode=self.split_mode)
+                 duplicated=n_dupli, split=n_split, split_mode=self.split_mode,
+                 clone_policy=self.clone_policy, **fallback_stats)
         )
         # New children must not inherit evidence collected for their parent.
         for key in ("error_mass", "edge_mass", "score_count"):
             state[key].zero_()
+        if self.fallback_rank != "off":
+            state["fallback_error"].zero_()
+            state["fallback_views"].zero_()
+            state["fallback_seen"].clear()
         return n_dupli, n_split
 
     def _prune_gs(self, params, optimizers, state, step, scene=None):
