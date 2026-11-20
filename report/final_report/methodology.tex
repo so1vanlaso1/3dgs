@@ -1,0 +1,230 @@
+\section{Proposed Methodology and System Design}
+\subsection{Problem formulation and architecture}
+Given calibrated fitting cameras $\mathcal T$, their RGB images and an initialized point set, the training stage produces a set of optimized Gaussians $\mathcal G$. For the matte route it also receives weighted depth samples at fitting views. The renderer maps $(\mathcal G,K,T_{cw})$ to RGB, alpha and optionally expected depth. The allocation strategy controls the live size of $\mathcal G$ during refinement. The extraction stage consumes the final model and fitting cameras, and the editing stage consumes the extracted mesh. Figure~\ref{figure3} traces these stages. Table~\ref{tab:interfaces} identifies the outputs and checks at each handoff.
+
+\reportfigure[Acquisition, training, mesh extraction and editing workflow]{0.99\linewidth}{figures/pipeline.png}
+  {Acquisition, Gaussian training, volumetric extraction and polygon editing. The public route reads prepared cameras. The RGB-D route estimates a local map and reserves depth messages for the depth comparison.}{figure3}
+
+The public experiment uses an RGB objective and a common extractor. Comparing the two learned models at identical TSDF settings controls the extraction procedure. Changing grid resolution with either model fixed probes a different source of variability. The editor operates on triangle connectivity and never feeds its modifications back to the learned model. The raw export is therefore the appropriate interface for comparing two training strategies. A cleaned mesh serves the specific downstream design task.
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabularx}{\linewidth}{@{}p{.16\linewidth}YY@{}}
+\toprule
+\textbf{Stage} & \textbf{Input and output} & \textbf{Check}\\
+\midrule
+Camera setup & Photographs and COLMAP model, or calibrated color/depth messages. Outputs camera-to-world poses, intrinsics, points and split & Valid image associations, dimensions, finite points and rotations\\
+Training & Prepared scene, configuration and camera sequence. Outputs Gaussian parameters and metrics & Same initialization, exact ordered fitting indices, target RGB hashes and finite post-update parameters\\
+Extraction & Final checkpoint and fitting cameras. Outputs raw PLY, OBJ and grid record & Matching checkpoint, crop, fusion cameras and settings for both arms\\
+Cleanup & Raw PLY and extraction record. Outputs cleaned PLY and silhouette comparison & Input hash, finite loaded mesh, face and vertex counts and recorded filter operations\\
+Editing & PLY, camera crop and fixed patch specification. Outputs Blender project and independent reopen record & Unit import transform, matching topology, saved document hash and evaluated displacement\\
+\bottomrule
+\end{tabularx}\par
+\captionof{table}[Pipeline stages, outputs and integrity checks]{Stage interfaces and integrity checks.}\label{tab:interfaces}
+\end{minipage}\end{center}
+
+\subsection{Image preparation and camera estimation}\label{sec:acquisition}
+\subsubsection{Public photograph route}
+The primary indoor benchmark uses factor-two Mip-NeRF 360 images. The frozen outdoor Garden test uses factor-four images. Both routes read the prepared photographs and the distributed COLMAP models. The preparation script fetches the selected images and sparse model, copies the images into the prepared directory and rescales each camera to the actual width and height. The trainer uses data factor one on this prepared directory to avoid a second downsampling. The loader inverts world-to-camera extrinsics and normalizes camera centers and points using a common similarity followed by principal-axis alignment. It records a single transform for all points and cameras. The normalized camera distance bound defines the scene-scale factor used by the trainer. Scene scale governs thresholds and learning rates. It is distinct from the multiplicative normalization used to convert the matte depths back to meters.
+
+The loader sorts image names and assigns every eighth image, beginning with index zero, to validation. The other views form the fitting set. Supplied SfM models use the benchmark images, so validation is a holdout from Gaussian RGB fitting. The camera model and sparse initializer may already reflect correspondences from those images. The project verifies readable dimensions, absence of exact duplicate groups and structurally valid rotations and points. It preserves low-texture views where the audit finds legitimate scene content, such as the blank wall in Room [\hyperlink{evE1}{E1}].
+
+\subsubsection{Local RGB-D route}
+The museum experiment begins with a RealSense D455 recording. Preparation preserves message identities, timestamps and file hashes. SDK-checked calibration and the replay convention transform depth points to the color camera. Frame provenance allows the split to be enforced at the depth-message level even when nearby images depict the same object. The selected matte segment has broader stable texture and better track support than the difficult exhibit and trajectory transitions. The whole-route repair experiments found unresolved intervals under independent checks, so the matched experiment uses a local coordinate system.
+
+The local optimizer obtains tracks from fixed-calibration COLMAP features and sequential matches. Some feature tiles are withheld from fitting and used for independent correspondence checks. Track observations supply an initial robust metric scale. The joint bundle adjustment extends Equation~\ref{eq:ba} with metric camera-axis factors and fixes the first camera and the intrinsics. Factor weights account for range and local sample spread by an assumed uncertainty model. The bounded solve permits up to 45 evaluations. The fitting budget can terminate before numerical convergence, so the local consistency checks determine whether a submap can be used.
+
+At approximately 10 fitting observations per second, the matte submap registered 92 of 92 fitting cameras. Its spatially withheld checks report median 3D separation 8.34 mm and median reprojection 0.468 pixels. These checks address consistency within the local route and declared support. The three reserved evaluation cameras are localized through RGB against the fixed map. Their depth identities are excluded from the fitting tracks, initializer and training-depth directory. Including those three poses gives 95 local camera records. The paired Gaussian test uses 21 selected fitting frames and three evaluation frames. It builds a common initializer of 90,000 evidence-ranked representatives. Supported points originate from fitting-depth samples and must have agreement from separated views with no observed free-space conflict [\hyperlink{evE2}{E2}].
+
+\subsubsection{Video entry point and failure handling}
+The auxiliary RGB-only MP4 pipeline extracts frames, runs CPU COLMAP, finds the largest model and checks registration before training. Its default gate requires at least 20 registered images, 100 sparse points and 80\% frame registration in that model. The tested user video failed the registration gate at both sampling rates. A high registration fraction is a minimum input check. Inspecting residuals, connected segments and independent revisits is still necessary before assigning physical meanings to uncertain regions. The public images-to-edit reproduction uses supplied SfM cameras and does not depend on the MP4 pipeline [\hyperlink{evE7}{E7}].
+
+\subsection{Baseline Gaussian optimization}
+Each prepared sparse point starts a Gaussian center. The initial scale is proportional to the root mean square distance to its three nearest neighbors, repeated along the three axes. The constant spherical harmonic term derives from the point color, and the higher-order coefficients begin at zero. Quaternions and opacity logits follow the trainer initialization with the fixed experiment seed. The same parameter tensors initialize the two arms in each comparison. A sorted tensor digest checks exact initial equality before any optimizer update.
+
+At each update the trainer loads one fitting camera and differentiably rasterizes the projected scene. The active harmonic degree increases by one at each 1,000-update interval until degree three. The main supervised objective is
+\begin{equation}
+ L_{\mathrm{RGB}}=0.8\,\mathrm{mean}_{p,c}|C_{pc}-I_{pc}|
+                         +0.2\bigl(1-\mathrm{SSIM}(C,I)\bigr).
+\end{equation}
+When a mask is supplied, the L1 term averages included pixels and the SSIM calculation zeros excluded positions on both sides. Adam optimizes each parameter family with its own learning rate. The center rate depends on scene scale and decays during training. Camera pose refinement is disabled in these runs, so the compared methods use the same camera model.
+
+In the matte pair, the same confidence-weighted inverse-depth term is added to both arms with coefficient $0.01$. If $\widehat z_j$ is the bilinearly sampled expected depth, $z_j$ an aligned fitting depth and $q_j>0$ its confidence, the implemented residual is
+\begin{equation}
+ L_{\mathrm{depth}}=s_{\rm scene}
+  \frac{\sum_{j\in\mathcal D}q_j\left|\operatorname{disp}(\widehat z_j)-1/z_j\right|}
+       {\max\bigl(\sum_{j\in\mathcal D}q_j,10^{-8}\bigr)}.
+\end{equation}
+Here $\mathcal D$ contains valid positive finite sensor observations and weights, and the predicted disparity is zero for invalid or nonpositive predicted depth. The loss is zero on an empty support set. Surface-curvature and sensor-alpha penalties are disabled in the primary protocol. The curvature study varies its own coefficient in an earlier paired Room experiment.
+
+B00 names the local trainer's \texttt{DefaultStrategy} with the study's refinement schedule. It uses signed projected-mean gradients at threshold $2\times10^{-4}$. The accumulated norm is averaged over projected observations. When the mean exceeds that threshold, the primitive is duplicated if its maximum scale is at most $0.01s_{\rm scene}$. Otherwise the parent is replaced with two randomly offset children. The stochastic offsets are sampled in local axes, transformed by the parent rotation, and scaled by the covariance axes. The children's scale is the parent scale divided by 1.6. There is no primitive ceiling for this arm. Both arms share opacity reset and the underlying pruning policy.
+
+\subsection{A05-Abs budget-aware densification}\label{sec:allocation}
+\subsubsection{Gradient gate}
+For each projected occurrence of Gaussian $i$ in a render of width $W$ and height $H$, let $a_{iv}=\sum_p |b_{ivp}|$ be the renderer's existing component-wise absolute positional-gradient sum. The gradients correspond to the actual training objective, including the depth term where enabled. Let $V_i$ count the projected occurrences in the current accumulation interval. The trainer converts the projected position derivative to normalized screen coordinates. With one camera per batch the scalar statistic is
+\begin{equation}
+ g_i=\frac{\displaystyle\sum_{v:\,i\,\mathrm{projected}}
+        \left\|\mathrm{diag}(W_v/2,H_v/2)\,a_{iv}\right\|_2}
+        {\max(V_i,1)} .
+\end{equation}
+The generic gsplat strategy also scales by the number of cameras in the batch. Packed projections provide global IDs for this accumulation. A projected occurrence can count toward $V_i$ even if that Gaussian was absent from the top contributors for image scoring. With activated opacity $o_i$, the eligible set is
+\begin{equation}
+ \mathcal E=\{i:g_i>0.0008,\ o_i\geq0.005\}.
+\end{equation}
+The screen-radius branch and below-threshold fallback are disabled. The absolute-gradient threshold follows the example in the gsplat strategy documentation for this statistic. Raising the threshold changes eligibility in addition to switching the aggregation rule. The Room factorial measures both changes separately.
+
+\subsubsection{Reconstruction-error attribution and edge evidence}
+Starting at loop index 500, and every ten indices until the refinement stop, the strategy samples the current fitting image before backward. It does not compute a second RGB image. A CUDA contributor pass reuses the same projected means, conics, effective opacities and tile intersections. Each pixel reports up to four highest-weight contributors with their front-to-back weights and projected IDs. The observer remaps packed IDs to global primitive IDs and excludes ignored pixels, missing IDs and nonpositive or nonfinite weights. Attrition through compositing matters because a highly opaque primitive behind a visible surface can have little effect on the RGB residual.
+
+Let $w_{ivp}$ be the compositing weight and $I_{vp}$ the target. The observer forms grayscale $J_{vp}$ by averaging the RGB channels. An absolute four-neighbor Laplacian with replicated borders provides edge strength $\ell_{vp}$. For every scored fitting image, define
+\begin{align}
+ e_{vp}&=\tfrac13\textstyle\sum_{c=1}^3 |C_{vpc}-I_{vpc}|,\\
+ \ell_{vp}&=|J_{v,p+\hat x}+J_{v,p-\hat x}+J_{v,p+\hat y}+J_{v,p-\hat y}-4J_{vp}|.
+\end{align}
+If $\mathcal P_{iv}$ contains pixels where $i$ is in the reported contributor list, the strategy accumulates the sums
+\begin{align}
+ E_i &=\sum_{v}\sum_{p\in\mathcal P_{iv}}w_{ivp}e_{vp},&
+ B_i &=\sum_{v}\sum_{p\in\mathcal P_{iv}}w_{ivp}\ell_{vp},&
+ m_i &=\sum_v\mathbf 1[|\mathcal P_{iv}|>0].
+\end{align}
+Here $m_i$ counts contributing scored observations, once per image occurrence, and can count a repeated camera. The per-observation averages $E_i/\max(m_i,1)$ and $B_i/\max(m_i,1)$ preserve the effect of screen-space footprint area and contribution. They do not divide by the number of pixels or the sum of the weights. For example, if a pixel has average RGB error 0.20 and edge strength 0.40, a listed contributor with $w=0.30$ receives 0.06 error mass and 0.12 edge mass. Many pixels in the same scored image may add mass, while the observation count for that image remains one.
+
+\subsubsection{Robust normalization and ranking}
+Each score channel has a different numerical scale and distribution. For any vector $x$ across primitives, replace nonfinite and negative entries with zero to obtain $x_i^+$. Compute $m_x$ as the PyTorch median of positive $x_i^+$ over eligible parents. For even counts this takes the lower middle value. The normalization is
+\begin{equation}
+ {\cal N}_{\mathcal E}(x)_i =
+ \begin{cases}
+  \min(20,\,x_i^+/\max(m_x,10^{-12})), &\text{if an eligible positive value exists},\\
+  0, &\text{otherwise}.
+ \end{cases}
+\end{equation}
+This median scaling makes the score relative to the candidate population at the current event. It clips extreme normalized scores before combining them. There is no common global mean or variance. Normalized error and edge evidence are then discounted by $\eta_i=\sqrt{\min(1,m_i/3)}$. One scored observation contributes at about 0.577 of its normalized value, two at 0.816 and three or more at full weight. The gradient is unaffected by this discount. The final score is
+\begin{equation}
+ S_i={\cal N}_{\mathcal E}(g)_i+
+ \eta_i\,{\cal N}_{\mathcal E}\bigl(E/\max(m,1)\bigr)_i+
+ 0.25\,\eta_i\,{\cal N}_{\mathcal E}\bigl(B/\max(m,1)\bigr)_i .
+ \label{eq:ranking}
+\end{equation}
+The project uses equal weights for the normalized gradient and residual, with a reduced edge weight to limit the influence of texture and lighting contrast. These weights govern selection only. A Gaussian at a strong image edge can score highly without belonging to an actual depth boundary. Median references also shift when the eligibility rule changes, so the factorial contrasts measure the effect of the gradient rule through the complete selection mechanism.
+
+\subsubsection{Event-indexed count ceiling}
+Let $N_0$ be the initializer count and $C$ the configured cap. The schedule is defined on actual refinement events. For zero-based loop index $s$, it tests a strict start and stop, a periodic interval, and an optional pause after opacity reset. With the primary schedule the 54 events are $600,700,\ldots,5900$. Refinement at loop index 600 runs after the 601st update. Opacity reset triggers at index 3000, after that event's grow and prune. The reset at 6000 is skipped because the refinement callback returns at the stop index.
+
+For event $k$ of $K$ scheduled events, define $u=k/K$. The schedule and the maximum number of additions are
+\begin{align}
+ C_k &=\min(C,\lfloor N_0+(C-N_0)(2u-u^2)\rfloor),\\
+ b_k&=\max(0,C_k-N_k),\qquad
+ a_k=\min(b_k,|\mathcal E_k|),
+ \label{eq:count}
+\end{align}
+where $N_k$ is the live count before growth. The quadratic has a larger step early in refinement and a decreasing increment toward the cap. It permits earlier capacity allocation while making additions compete for the available slots. It neither forces growth to the cap nor uses the next event's pruning to fund current additions. Initial counts above $C$ raise an error.
+
+Each selected parent has the same net cost of one primitive. If demand exceeds the slots, the strategy selects the $a_k$ highest scores with \texttt{topk}. Unselected parents stay in the model unless pruned. They are not queued and can compete again based on newly accumulated evidence. Exact score ties have the order returned by the backend. If demand is smaller than the slots, all eligible parents can split and the remainder is unused. If the count reaches the current target, no growth occurs. The next event recomputes headroom from its new target and live count.
+
+For public Room at index 600, the cap schedule targets 134,180 from an initializer of 112,627. The 21,553 available slots exceed the 12,642 eligible parents. All eligible parents split, and 1,897 weak primitives are then pruned, leaving 123,372. At index 5900 the target reaches 700,000. There are 450,828 live primitives before growth. Eligibility limits additions to 1,958, and pruning removes 301, so the final count is 452,485. This example explains how the measured count can end far below the ceiling.
+
+\subsubsection{Long-Axis Split and state transfer}
+For a selected parent with longest scale $s_k$ and corresponding unit world axis $v_k=R_i\mathbf e_k$, the child centers and scales are
+\begin{align}
+ \mu_\pm&=\mu_i\pm 3d\,s_k v_k,&
+ s'_k&=(1-d)s_k,&
+ s'_j&=s_j\sqrt{1-d^2}\quad (j\ne k).
+ \label{eq:las}
+\end{align}
+The construction in Figure~\ref{figure4} uses the parent's oriented $3\sigma$ extents. Along the original major axis, each child's $3\sigma$ half-width is $3(1-d)s_k$, so the outer endpoints of the pair coincide with the parent's original axial endpoints. At $d=0.45$, each center moves $1.35s_k$, each axial half-width is $1.65s_k$, and the axial intervals overlap by $0.60s_k$. The secondary scales retain about 89.3\% of their original values. This is a footprint construction using isocontour extents. It allows immediate changes to the rendered image and does not impose a physical continuity constraint.
+
+\reportfigure[Child placement in Long-Axis Split]{0.89\linewidth}{figures/long_axis.png}
+  {Long-Axis Split used by A05-Abs. The cross denotes the parent center. The child footprints are placed symmetrically along its longest rotated axis and shrink along all axes.}{figure4}
+
+Both children copy the parent's quaternion and spherical harmonic coefficients. The optimizer stores $\log(s'_j)$ and $\operatorname{logit}(0.6\,o_i)$ for each child. Opacity reduction moderates overlapping contributions. It does not conserve pixel alpha, because transmittance and footprints change together. The $0.45$ offset and $0.6$ opacity multiplier use the empirical defaults of Deng et al. \cite{ref7}. Moving centers closer gives more projected overlap, and moving them farther can enlarge the discrepancy in the interior of the parent footprint. The archived A04 Room sweep found a small PSNR benefit for another setting in its selection run, with mixed results in confirmation. The primary candidate retains the defaults for comparison with the archived protocol.
+
+The operator drops the selected parent rows, keeps the unselected rows and appends the positive-offset child rows followed by the negative-offset rows. The optimizer parameter-group reference is replaced for each attribute. The per-tensor Adam step counter persists and the surviving rows keep their first and second moments. Child moment rows are initialized to zero. Copying those moments from the parent would carry gradient history associated with its original location and covariance. Auxiliary per-primitive tensors are reindexed as the scene receives its split and removal hooks. Contribution and visibility statistics are zeroed for the next refinement window. Subsequent renders and optimizer steps use the new attributes and new per-row state.
+
+\subsubsection{Refinement event and computational cost}
+Figure~\ref{fig:event} summarizes one growth event. Table~\ref{tab:pseudocode} places it within the optimizer loop.
+\begin{center}\begin{minipage}{\linewidth}
+\centering\small
+\setlength{\fboxsep}{5pt}
+\begin{tabular}{@{}ccc@{}}
+\fcolorbox{ReportBlue}{ReportLight}{\strut Average position gradients} &
+$\longrightarrow$ &
+\fcolorbox{ReportBlue}{ReportLight}{\strut Gate by gradient and opacity}\\
+& & $\downarrow$\\
+\fcolorbox{ReportBlue}{ReportLight}{\strut Normalize and rank eligible parents} &
+$\longleftarrow$ &
+\fcolorbox{ReportBlue}{ReportLight}{\strut Compute count headroom}\\
+$\downarrow$ & & \\
+\fcolorbox{ReportBlue}{ReportLight}{\strut Split up to the available slots} &
+$\longrightarrow$ &
+\fcolorbox{ReportBlue}{ReportLight}{\strut Prune, log and clear scores}
+\end{tabular}\par
+\captionof{figure}[Sequence of operations at a refinement event]{Sequence at a scheduled A05-Abs refinement event. The new live count includes both the split and the subsequent pruning.}\label{fig:event}
+\end{minipage}\end{center}
+
+\begin{center}\begin{minipage}{\linewidth}
+\small
+\begin{tabularx}{\linewidth}{@{}rY@{}}
+\toprule
+ & \textbf{Inputs} Prepared scene, ordered fitting-camera indices, initial Gaussians, Adam state and cap $C$.\\
+\midrule
+1 & Initialize counters and score masses. Reject an initializer that exceeds the cap.\\
+2 & For each loop index $s$, load the next camera and rasterize the scene.\\
+3 & \quad On every 10th index in the scoring interval, gather weighted contributor IDs and accumulate image evidence.\\
+4 & \quad Backpropagate the fitting objective. Step the parameter optimizers and learning-rate schedules.\\
+5 & \quad If $s<6000$, update the running projection-gradient norms and counts from that backward pass.\\
+6 & \quad If $s$ is a scheduled refinement event, compute $C_k$, $a_k$ and the eligible set.\\
+7 & \qquad If $a_k>0$, rank eligible parents by Equation~\ref{eq:ranking} and split the $a_k$ highest scores.\\
+8 & \qquad Remove splats with $o_i<0.005$. After index 3000 also remove splats with maximum scale exceeding $0.1s_{\rm scene}$.\\
+9 & \qquad Record the before, target, eligible, added, pruned and after counts. Clear the attribution and gradient statistics.\\
+10 & \quad If $s=3000$, cap activated opacities at $0.01$ and reset their optimizer moments.\\
+11 & \quad At requested evaluation indices, render the held-out views from the updated model.\\
+12 & Save finite post-update parameters, camera order, metrics and growth history.\\
+\bottomrule
+\end{tabularx}\par
+\captionof{table}[Training and refinement pseudocode]{A05-Abs training and refinement pseudocode. Loop indices are zero-based.}\label{tab:pseudocode}
+\end{minipage}\end{center}
+
+The additional observer uses $O(PK_p)$ storage for the reported IDs and weights at $P$ pixels and $K_p=4$. Selecting contributors still visits potential tile intersections, so computation depends on the number of overlapping projected Gaussians as well as image size. The three score channels require $O(N)$ running state. At a refinement event, the policy scans the live set, obtains a median per enabled channel on eligible candidates and performs a backend top-$a_k$ selection. An upper bound for a design using full sorting for those order statistics would be $O(N+|\mathcal E|\log|\mathcal E|)$. Actual GPU time also depends on memory movement when resizing the parameter and optimizer arrays. As $N$ grows, the cost of Adam and the rasterizer can dominate the extra score calculation. The runtime study measures the aggregate behavior rather than assuming a speedup from reducing $N$.
+
+\subsubsection{Implementation map and design alternatives}
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabularx}{\linewidth}{@{}p{.25\linewidth}YY@{}}
+\toprule
+\textbf{Code path} & \textbf{B00 behavior} & \textbf{A05-Abs behavior}\\
+\midrule
+\texttt{simple\_trainer.py} & One camera per step, shared loss and optimizers & Same loop, with detached image-observer call and absolute-gradient render flag\\
+\texttt{rendering.py} & Returns signed projected-mean gradients & Exposes absolute component gradients through the existing CUDA backward path\\
+\texttt{strategy/default.py} & Gradient/size clone and random split, pruning, reset & Reused stage hooks, gradient accumulation, pruning and reset\\
+\texttt{strategy/budget.py} & No allocation ranking or scheduled count ceiling & Candidate mask, image attribution, median scaling, support discount and budget history\\
+\texttt{strategy/ops.py} & Duplicate or randomly split and migrate parameter rows & Symmetric split geometry and opacity, with the same optimizer/scene migration mechanism\\
+\bottomrule
+\end{tabularx}\par
+\captionof{table}[Implementation of the baseline and candidate strategies]{Main code paths for the matched trainer.}\label{tab:code}
+\end{minipage}\end{center}
+
+Table~\ref{tab:code} identifies the files implementing each strategy. A constant cap would allow early events to use all spare capacity, potentially increasing cost for the rest of training. A rate limit based only on current count would be sensitive to opacity-reset pruning. The event schedule uses the initial count as a stable reference and current count as the allocation state. Gradient-only ranking is cheaper and provides a meaningful comparison, while target edges and residual attribution supply information about different aspects of the current error. The study disables each of those two image cues separately. The optional residual fallback was screened earlier against equal-count gradient selection and did not pass the practical criterion. The final candidate uses the ordinary gradient gate for every split.
+
+The all-split policy avoids a clone at exactly the same center and leaves a common one-parent-to-two-children budget accounting rule. It is still possible for children to overlap substantially in the image. The earlier split-by-clone factorial distinguishes the operator bundle from the small-parent policy. Recovery-aware pruning and alternate update schedules from the related paper are outside the implemented policy. These choices keep the main trainer focused on how it grows Gaussians and preserve a common pruning rule for comparison.
+
+\subsection{Gaussian depth rendering and surface extraction}
+The extractor loads the final post-update checkpoint and reuses the trainer's camera parser. It renders at most 64 evenly spaced fitting cameras in the loader's fitting order. Both arms use the same camera identities. Resolution is reduced to $\lfloor W/4\rfloor$ by $\lfloor H/4\rfloor$, with the intrinsics scaled using the realized ratios. The render uses RGB and expected depth. Pixels require finite positive depth and accumulated alpha strictly greater than 0.7. Optional image masks exclude additional pixels. The integrator ignores observations beyond eight times the loader scene scale. Neither held-out views nor sensor depths are fused, including in the matte experiment.
+
+For the uniform volume, compute the first and 99th initializer percentiles on each axis. Center the cube at the midpoint of those bounds and set its length $L$ to 1.2 times the largest span. With requested spacing $0.01s_{\rm scene}$ and maximum resolution 192, use
+\begin{equation}
+ R=\min(192,\lceil L/(0.01s_{\rm scene})\rceil),\qquad
+ \Delta=L/R,\quad \tau=4\Delta.
+\end{equation}
+The cube and default grid settings are shared within a scene pair because both use the same initializer. The actual spacing can be coarser than requested. The bounded dense volume scales as $O(R^3)$ in voxel storage. It restricts unbounded backgrounds and keeps memory usage bounded. The crop, low-resolution expected depth and alpha cut all affect how far the reconstructed surface extends.
+
+The implementation uses \texttt{UniformTSDFVolume} with RGB8 color and passes the world-to-camera inverse to the integrator. It exports PLY with vertex colors and normals and an OBJ suitable for standard editors. It rejects empty geometry, verifies finite vertices and reloads the PLY to check counts. The report saves the checkpoint digest, camera identities, occupancy support, grid and topology. A known-plane check justified using the uniform backend after the previous scalable backend returned an empty result on the same host. The fixed-truncation sensitivity study uses the identical uniform path with finer and coarser grids [\hyperlink{evE5}{E5}, \hyperlink{evE9}{E9}].
+
+\subsection{Mesh cleanup and Blender verification}
+The raw meshes use the same topology measurements before design cleanup. An edge incident to one face indicates an open boundary; incidence above two is an edge-level nonmanifold condition. Connected components use face adjacency through edges. These checks are computed on the loaded mesh. A watertight surface also requires closed boundaries and additional manifold and intersection conditions. Area or face fraction of the largest component helps distinguish many small fragments from a split in the bulk surface. A small component can be an intended object or an artifact.
+
+The representative Room recipe removes degenerate and repeated triangular faces, including reversed duplicates. It then removes only connected components with fewer than eight faces and area less than a quarter of the squared voxel length. It compacts unused vertices and applies quadric decimation to approximately 65\% of the retained face count with a boundary penalty of 8. Quadric decimation ranks edge collapses by a local surface approximation error. The boundary penalty makes boundary changes more expensive without filling holes. A final duplicate/degeneracy pass and normal recomputation precede export. The cleanup record stores counts and hashes after each stage. The silhouette check uses the same cameras and crop boundaries on the raw and cleaned meshes.
+
+The matched comparison selects a connected patch around a corresponding camera ray hit and displaces it toward the camera under a shared voxel-scaled recipe. The separate cleaned Room demonstration selects a connected tabletop patch around a fixed scene-coordinate seed, checks its height and upward normal, and lifts it using a cosine falloff. Blender stores the lift in a shape key at value one. A second headless process reopens the project, evaluates the mesh, verifies the selected displacement against the expected vector and checks that evaluating and rendering the file did not alter the saved document bytes. Photographs and meshes use the same chosen camera for visual comparison, and the Blender camera convention is obtained from the stored camera-to-world transform [\hyperlink{evE6}{E6}].
+
+\subsection{Reproducibility and failure handling}
+The trainer records configuration, initial tensors by digest, full camera order, metrics and the final post-update checkpoint. The legacy numbered checkpoint precedes its optimizer step. Extraction reads \texttt{final\_post\_update.pt}. Explicit camera replay addresses an earlier change in sample order after the first epoch when loader workers changed. Pair audits compare final RGB target pixels, extraction settings and camera lists. Data and checkpoint digests bind the results to their inputs.
+
+Incomplete attempts remain available for diagnosis. The checks catch counts above the cap, mismatched depth identities, empty fusion, nonfinite tensors and unexpected Blender displacement. Appendix A lists the commands and expected artifacts.

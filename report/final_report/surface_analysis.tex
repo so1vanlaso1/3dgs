@@ -1,0 +1,57 @@
+\subsection{Earlier split controls and hyperparameter sensitivity}
+The earlier A04 campaign varied the split operator and the treatment of small parents in a $2\times2$ factorial. It held the budget, ranking and camera order fixed within each of three Room seeds. The random operator uses the original offset sampling, scale reduction and opacity convention. The Long-Axis Split operator changes placement, scale and opacity as one bundle. The small-parent policy either clones those parents or applies the same split operator used for large ones.
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrrr@{}}
+\toprule
+Operator & Small parents & PSNR (dB) & SSIM & LPIPS & Gaussians\\
+\midrule
+Random & Clone & $30.129\pm0.090$ & 0.90202 & 0.21174 & 699,202\\
+Random & Split & $30.292\pm0.120$ & 0.90360 & 0.20486 & 699,739\\
+Long axis & Clone & $30.425\pm0.076$ & 0.90332 & 0.21023 & 699,226\\
+Long axis & Split & $30.633\pm0.077$ & 0.90552 & 0.20344 & 598,107\\
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Split operator and small-parent policy across three seeds]{Room A04 split operator by small-parent policy, paired seeds 42--44. Shown are mean and sample SD for PSNR and means for the other outcomes.}\label{tab:split-ablation}
+\end{minipage}\end{center}
+
+With cloning retained, Long-Axis Split gained $0.296\pm0.082$ dB over random splitting. With all selected parents split, the corresponding gain was $0.341\pm0.132$ dB. Replacing clones under the long-axis operator gained $0.208\pm0.022$ dB and lowered the final count. These paired effects support the combined operator and all-split design on this Room protocol. The operator changes three child attributes together. The experiment measures that bundle on A04 with signed gradients [\hyperlink{evE3}{E3}].
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}rrrrrr@{}}
+\toprule
+Distance $d$ & Opacity multiplier & PSNR (dB) & SSIM & LPIPS & Gaussians\\
+\midrule
+0.30 & 0.40 & 30.6196 & 0.90462 & 0.20598 & 525,570\\
+0.30 & 0.80 & 30.5459 & 0.90360 & 0.20538 & 568,339\\
+0.50 & 0.40 & 30.6061 & 0.90539 & 0.20281 & 607,499\\
+0.50 & 0.80 & 30.4872 & 0.90345 & 0.20352 & 641,270\\
+\textbf{0.45} & \textbf{0.60} & 30.6007 & 0.90520 & 0.20279 & 597,975\\
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Sensitivity to split distance and opacity multiplier]{Earlier A04 Room seed-42 sensitivity to the split distance and opacity multiplier. The reference row is the setting retained for A05-Abs.}\label{tab:offset-ablation}
+\end{minipage}\end{center}
+
+In Table~\ref{tab:offset-ablation}, the $(0.30,0.40)$ setting led PSNR in the Room selection run by about 0.019 dB, with fewer primitives and higher LPIPS. Its confirmation PSNR changes relative to the reference were $+0.035$ and $-0.017$ dB on the two remaining Room seeds and $+0.027$ dB on Counter seed 42. LPIPS increased in each confirmation case. The split inherits the $0.45$ distance and $0.60$ opacity defaults supported as empirical trade-offs in the source literature. The local sensitivity data show that another setting can move count or PSNR favorably without jointly improving the image metrics across the tested repeats. The reference remains a documented operating point [\hyperlink{evE3}{E3}].
+
+The earlier signed-gradient cap sweep on Room produced 399,842, 597,975 and 604,705 Gaussians at caps of 400,000, 700,000 and 1,000,000. Their PSNR values were 30.546, 30.601 and 30.605 dB. This behavior illustrates the distinction between an imposed ceiling and the count that eligibility produces. The new A05-Abs sweep in Section~\ref{sec:room-caps} tests whether the same pattern persists after switching gradient mode and threshold [\hyperlink{evE3}{E3}, \hyperlink{evE8}{E8}].
+
+\subsection{Interpreting geometry and failure cases}
+Three causes can produce a missing or displaced surface. Camera errors move the predicted locations of observations between views. Representation errors change the expected depths before meshing. Extraction choices change which depth estimates contribute and how they become triangles. The public pair holds camera input and extractor settings fixed, so a paired difference reflects how the two learned models interact with that extractor. The public comparisons cannot identify absolute error in the shared input camera models. The matte experiment evaluates Gaussian depths before fusion and mesh depths afterward. The grid sweep measures one extraction variable while the checkpoints are fixed.
+
+Table~\ref{tab:failure-cases} connects the inspected defects to the surfaces and views where they occurred. Narrow supports disappear in mesh renders of Room and thin tread detail fuses in Kitchen even when the corresponding RGB view is recognizable. In Bonsai the model reproduces the color pattern of the blossoms while the mesh joins many blossoms into a few surfaces. The matte doorway has a larger opening in the candidate mesh, and the bright boundary is an uncertain transition for opacity and depth. These examples show what the topology counts alone cannot diagnose. Each is selected for inspection and does not estimate the frequency of that failure mode across all pixels or scenes.
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabularx}{\linewidth}{@{}p{.23\linewidth}YY@{}}
+\toprule
+\textbf{Case} & \textbf{Observation} & \textbf{Diagnostic scope}\\
+\midrule
+Room tabletop and supports & Broad top survives. Thin supports remain incomplete before and after simplification & The tabletop lift samples the selected patch\\
+Kitchen toy bulldozer & Outline survives. Adjacent tread details merge at common extraction settings & The RGB image can represent texture in the merged region\\
+Bonsai and bicycle & Blossom clusters join. Bicycle details break apart & Counts mix separate objects with fragments\\
+Matte doorway and glass edge & Candidate opening grows while stable-depth coverage increases overall & Pooled coverage can increase on one surface and decrease on another\\
+Museum trajectory & Independent validation leaves many route intervals unresolved & Matte evidence applies to one local submap\\
+\bottomrule
+\end{tabularx}\par
+\captionof{table}[Observed surface and camera failure cases]{Observed failure modes and the scope of their inspection.}\label{tab:failure-cases}
+\end{minipage}\end{center}

@@ -1,0 +1,84 @@
+{
+  "date": "2026-11-17",
+  "image_size": [834, 463],
+  "annotation_basis": "Visual review of the rectified source RGB. Vertices are native pixel coordinates. Corresponding vertices interpolate linearly between frame indices. Static regions identify plausible landmarks from visible material and texture. Sensor agreement on those landmarks is measured separately.",
+  "cases": {
+    "target": {
+      "notes": "The lower-right sliver resembles a foreground sleeve. It is partially visible and its identity is uncertain. The large artwork region includes static content under shifting reflections. The narrow display-edge region includes a changing silhouette or reflection. The static regions cover trim, exposed wall and display fixture surfaces, and printed details whose depth may still be ambiguous through glass.",
+      "people_candidate": [
+        {
+          "0": [[832, 385], [833, 385], [833, 462], [763, 462]],
+          "7": [[833, 400], [833, 400], [833, 462], [797, 462]],
+          "14": [[833, 445], [833, 445], [833, 462], [832, 462]]
+        }
+      ],
+      "reflection_glare": [
+        {
+          "0": [[468, 0], [833, 0], [833, 324], [478, 276], [429, 165]],
+          "7": [[483, 0], [833, 0], [833, 334], [502, 291], [449, 166]],
+          "14": [[530, 0], [833, 0], [833, 347], [547, 299], [490, 165]]
+        },
+        {
+          "0": [[165, 6], [229, 10], [189, 268], [146, 267]],
+          "7": [[213, 8], [318, 13], [261, 276], [177, 264]],
+          "14": [[269, 8], [375, 13], [321, 275], [229, 265]]
+        }
+      ],
+      "static_candidate": [
+        {
+          "0": [[0, 12], [149, 12], [127, 273], [0, 265]],
+          "7": [[0, 12], [168, 12], [139, 275], [0, 265]],
+          "14": [[0, 12], [219, 12], [181, 275], [0, 268]]
+        },
+        {
+          "0": [[0, 277], [188, 286], [205, 410], [0, 409]],
+          "7": [[0, 278], [211, 287], [224, 423], [0, 410]],
+          "14": [[0, 285], [270, 284], [289, 438], [0, 428]]
+        },
+        {
+          "0": [[250, 0], [396, 0], [364, 269], [454, 309], [753, 343], [743, 408], [221, 377]],
+          "7": [[319, 0], [425, 0], [389, 272], [477, 314], [756, 351], [743, 406], [264, 385]],
+          "14": [[377, 0], [490, 0], [454, 282], [528, 320], [757, 363], [741, 418], [326, 393]]
+        }
+      ]
+    },
+    "matte_control": {
+      "notes": "No clear foreground person. Glare appears on the bright labels and the central illustrated panel. Static candidates cover wall and panel details outside the strongest highlights.",
+      "people_candidate": [],
+      "reflection_glare": [
+        {
+          "0": [[278, 0], [420, 0], [431, 222], [264, 218]],
+          "5": [[264, 0], [400, 0], [410, 222], [250, 218]],
+          "10": [[235, 0], [395, 0], [405, 217], [225, 218]]
+        },
+        {
+          "0": [[516, 67], [647, 56], [636, 202], [518, 182]],
+          "5": [[500, 65], [636, 57], [624, 205], [504, 180]],
+          "10": [[483, 66], [618, 56], [608, 208], [481, 186]]
+        },
+        {
+          "0": [[693, 85], [811, 84], [797, 294], [667, 296]],
+          "5": [[676, 86], [795, 85], [778, 295], [650, 298]],
+          "10": [[658, 84], [775, 84], [762, 299], [635, 301]]
+        }
+      ],
+      "static_candidate": [
+        {
+          "0": [[0, 0], [225, 0], [213, 462], [0, 462]],
+          "5": [[0, 0], [214, 0], [212, 462], [0, 462]],
+          "10": [[0, 0], [207, 0], [203, 462], [0, 462]]
+        },
+        {
+          "0": [[229, 237], [833, 318], [833, 462], [218, 462]],
+          "5": [[218, 235], [833, 322], [833, 462], [207, 462]],
+          "10": [[215, 233], [833, 320], [833, 462], [200, 462]]
+        },
+        {
+          "0": [[435, 0], [690, 0], [639, 306], [425, 306]],
+          "5": [[420, 0], [673, 0], [625, 306], [416, 306]],
+          "10": [[403, 0], [656, 0], [608, 306], [401, 306]]
+        }
+      ]
+    }
+  }
+}

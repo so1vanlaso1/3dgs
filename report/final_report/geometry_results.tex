@@ -1,0 +1,29 @@
+\subsection{Fixed-checkpoint TSDF grid sensitivity}\label{sec:grid-results}
+The matched reconstruction table uses one TSDF grid per scene. A separate matte experiment retains both final Gaussian checkpoints and compares grid resolutions 128, 192 and 256 over the same crop. It holds the 21 fitting camera samples, their rendering resolution, alpha threshold and absolute truncation length fixed. Resolution 192 uses the archived extraction for each arm. The other four meshes are freshly extracted. The actual normalized voxel lengths are approximately 0.0647, 0.0431 and 0.0324, respectively. The truncation distance stays at 0.1726 normalized units.
+
+For each reserved sensor frame, cast the same calibrated rays into all six meshes. Also render expected depth from both fixed Gaussian checkpoints. Compare discrepancies on the intersection of stable sensor pixels and valid predictions from all eight outputs. This is a stricter support than either original pairwise comparison. Table~\ref{tab:grid-depth} reports each output's coverage over all stable pixels. Table~\ref{tab:grid-topology} gives the topology for each grid. The common support lets the Gaussian and mesh errors be examined without changing the included pixels [\hyperlink{evE9}{E9}].
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrrr@{}}
+\toprule
+Output & Arm & Coverage & Signed median (cm) & Abs.\ median (cm) & Abs.\ P90 (cm)\\
+\midrule
+\inputrows{evidence/matte_grid_depth_rows.tex}
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Matte depth discrepancy on shared support across grids]{Sensor-depth statistics on joint support across both Gaussian predictions and all six matte mesh grids. Coverage is measured against all stable sensor pixels.}\label{tab:grid-depth}
+\end{minipage}\end{center}
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}rlrrrr@{}}
+\toprule
+Grid & Arm & Triangles & Components & Boundary edges & Largest area\\
+\midrule
+\inputrows{evidence/matte_grid_topology_rows.tex}
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Matte raw mesh topology across grid resolutions]{Raw mesh topology as grid resolution changes. Largest area is the fraction contributed by the largest edge-connected component by area.}\label{tab:grid-topology}
+\end{minipage}\end{center}
+\reportfigure[Matte depth discrepancy across TSDF grid resolutions]{0.99\linewidth}{figures/matte_grid_discrepancy.png}
+  {Held-out matte depth discrepancy in frame rgb\_0006487.png. Blue means the prediction lies nearer to the camera than the aligned sensor depth. Light gray masks pixels outside the shared stable support. The displayed color range clips at $\pm20$ cm.}{fig:grid-depth}
+\input{geometry_interpretation}

@@ -1,0 +1,55 @@
+\phantomsection
+\section*{Appendix A. Reproduce the Public Room Pipeline}
+\addcontentsline{toc}{section}{Appendix A. Reproduce the Public Room Pipeline}
+Extract \path{final_report_supplement.zip} and open PowerShell at its root. Configure Python~3.12, PyTorch, CUDA~12.8 and MSVC in an x64 developer shell by following \path{report/final_report/REPRODUCE.md}. The public data come from the official Mip-NeRF 360 archive. The supplement supplies the project source, the fitting order and the verified Room edit [\hyperlink{evE10}{E10}].
+
+The upstream archive was fetched again into an empty preparation directory. The fresh preparation matched all 311 existing factor-two photo files, the three original COLMAP binaries and the five files in the prepared sparse model byte for byte. The ordered fitting indices are shipped with the report. The benchmark dataset audit supplies the fitting and held-out identities [\hyperlink{evE1}{E1}, \hyperlink{evE10}{E10}].
+
+\subsection*{A.1. Run the public Room pipeline}
+Use the commands below in order. Adjust the Blender path if needed and choose a fresh results directory. The starter script stores the exact native CLI flags for each stage. The equivalent one-command run uses \texttt{-Stage All}.
+
+{\small
+\begin{verbatim}
+$run = '.\report\final_report\reproduce_room.ps1'
+$opts = @{
+    Python = '.\.venv\Scripts\python.exe'
+    Blender = 'C:\Program Files\Blender Foundation\Blender 4.5\blender.exe'
+    Work = 'results/report_room_replay'
+}
+& $run @opts -Stage Prepare
+& $run @opts -Stage Train
+& $run @opts -Stage Extract
+& $run @opts -Stage Clean
+& $run @opts -Stage Edit
+& $run @opts -Stage Verify
+\end{verbatim}
+}
+Table~\ref{tab:replay-artifacts} lists the expected stage outputs. Training uses 7,000 updates, seed 42, one packed image per batch and the frozen fitting order. Extraction uses the post-update checkpoint, 64 fitting cameras, quarter-resolution renders and a uniform TSDF grid up to 192 cells per axis. Verify reopens the saved project in a separate Blender process with autoexecution disabled and measures the tabletop patch in the evaluated mesh.
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabularx}{\linewidth}{@{}p{.17\linewidth}YY@{}}
+\toprule
+Stage & Files & Expected check\\
+\midrule
+Preparation & \texttt{dataset\_manifest.json}, \texttt{images/}, \texttt{sparse/0/} & 311 input images, 39 validation views, 112,627 sparse points and matching intrinsics\\
+Training & \texttt{experiment.json}, \texttt{final\_post\_update.pt}, trainer statistics and configuration & 7,000 updates, finite tensors, matched initialization and complete camera order\\
+Extraction & \texttt{raw\_mesh.ply}, \texttt{raw\_mesh.obj}, \texttt{report.json} & Nonempty triangles and matching camera, checkpoint and mesh hashes\\
+Cleanup & \texttt{room\_cleaned.ply}, \texttt{cleanup.json}, camera crops & Verified raw input and reloaded derivative topology\\
+Editing & \texttt{room\_tabletop\_edited.blend}, \texttt{design\_reopen.json} & Verified saved hash and evaluated displacement in a separate process\\
+\bottomrule
+\end{tabularx}\par
+\captionof{table}[Expected outputs and checks for a complete Room run]{Files that identify a complete public Room run.}\label{tab:replay-artifacts}
+\end{minipage}\end{center}
+
+\clearpage
+\input{room_replay_interpretation}
+
+\subsection*{A.2. Replay the controlled studies}
+The original controlled Room runner uses historical baseline target panels for its replay audit. The supplement contains the frozen protocol and verified results. The public standalone procedure above starts from prepared photographs and poses. The additional paired evaluation can also run from fresh benchmark inputs. Its commands and required scenes are listed in the guide.
+
+The matte sweep requires the original paired Week 12 checkpoints, prepared local data, extraction records and the three reserved depth messages. It verifies all relevant hashes. It uses the same support mask across the six meshes and two Gaussian predictions. Its JSON record retains all per-view depth summaries, topology and coverage. The local captures remain under their documented project paths. Section~\ref{sec:grid-results} identifies the measured comparison and its limits.
+
+\subsection*{A.3. Inspect common failures}
+An initialization hash mismatch points to a different input model, parser or runtime. A camera-order mismatch can arise despite matching seeds if image IDs, loading or random streams change. Start by checking the exact dataset identities and replay file. A checkpoint with nonfinite parameters is invalid even if a subset of rendered images appears normal. Empty TSDF output may indicate a camera-convention, volume-bounds or valid-depth problem. Inspect those inputs before loosening the thresholds.
+
+If the cleaned Room topology or imported bounds differ from its recorded source, inspect the PLY digest and vertex import scale. If Blender cannot recover a connected tabletop patch, preserve that failed run and inspect the camera crop and reopened displacement record. A screenshot of the selected vertices cannot substitute for the measured displacement. Benchmark scores and mesh counts can differ across runs despite a matching input protocol, so record observed values and identify any changed versions or conditions.

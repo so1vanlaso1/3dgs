@@ -1,0 +1,312 @@
+% Build from this folder with tectonic final_report.tex or two pdfLaTeX passes.
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{upquote}
+\usepackage{microtype}
+\usepackage[top=3cm,bottom=3cm,left=2cm,right=2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{array,booktabs,tabularx}
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage[table]{xcolor}
+\usepackage{caption}
+\captionsetup{hypcap=false,font=small,labelfont=bf,justification=raggedright,singlelinecheck=false,skip=4pt}
+\captionsetup[figure]{position=bottom}
+\captionsetup[table]{position=bottom}
+\newcommand{\reportfigure}[5][]{%
+  \begin{center}\begin{minipage}{\linewidth}\centering
+  \includegraphics[width=#2]{#3}\par
+  \captionof{figure}[#1]{#4}\label{#5}%
+  \end{minipage}\end{center}%
+}
+\usepackage[hidelinks]{hyperref}
+\definecolor{LinkInk}{HTML}{154C62}\newcommand{\reftitle}[2]{\href{#1}{\textcolor{LinkInk}{\textquotedblleft#2\textquotedblright}}}
+
+\newcommand{\UniversityLineOne}{VIETNAM NATIONAL UNIVERSITY HO CHI MINH CITY}
+\newcommand{\UniversityLineTwo}{HO CHI MINH CITY UNIVERSITY OF TECHNOLOGY}
+\newcommand{\FacultyName}{FACULTY OF COMPUTER SCIENCE AND ENGINEERING}
+\newcommand{\ReportCourse}{Specialized Project (CO4029)}
+\newcommand{\ReportTitle}{Budget-Aware Densification for Efficient 3D Gaussian Splatting: Surface Reconstruction and Editable Mesh Evaluation}
+\newcommand{\LecturerName}{Nguyen Tuan Khoi}
+\newcommand{\StudentName}{Nguyen Vu Long}
+\newcommand{\LogoFile}{figures/hcmut-logo.png}
+
+\definecolor{ReportBlue}{HTML}{123D70}
+\definecolor{ReportLight}{HTML}{EDF3F8}
+\definecolor{ReportGray}{HTML}{526170}
+\hypersetup{pdftitle={Budget-Aware Densification for Efficient 3D Gaussian Splatting},
+  pdfauthor={Nguyen Vu Long},pdfsubject={Specialized Project (CO4029)}}
+\renewcommand{\contentsname}{TABLE OF CONTENTS}
+\setcounter{tocdepth}{2}
+\setlength{\headheight}{40pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\emergencystretch}{1em}
+\renewcommand{\arraystretch}{1.13}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\makeatletter
+% Read generated alignment rows directly, without the file hooks of LaTeX's \input.
+\newcommand{\inputrows}[1]{\@@input #1 }
+\makeatother
+\raggedbottom
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\begin{tabular}{@{}c@{\hspace{7pt}}l@{}}
+  \raisebox{-0.40\height}{\includegraphics[width=8mm]{\LogoFile}} &
+  \begin{tabular}{@{}l@{}}\footnotesize\bfseries\ttfamily\UniversityLineTwo\\
+  \footnotesize\bfseries\ttfamily\FacultyName\end{tabular}
+\end{tabular}}
+\fancyfoot[L]{\scriptsize\ttfamily CO4029 / HK261}
+\fancyfoot[R]{\scriptsize\ttfamily Page \thepage/\pageref*{report-end}}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\footrulewidth}{0.3pt}
+
+\setlength{\topsep}{3pt}\begin{document}
+\hypersetup{pageanchor=false}
+\begin{titlepage}
+\centering
+{\bfseries\UniversityLineOne\\[1mm]
+\UniversityLineTwo\\[1mm]
+\FacultyName\par}
+\vspace{1cm}
+\includegraphics[width=3cm]{\LogoFile}\par
+\vspace{1cm}
+
+\begin{minipage}{0.88\textwidth}
+\raggedright
+{\Large\bfseries\ReportCourse\par}
+{\large Final Report\par}
+\vspace{0.55cm}
+\hrule
+\vspace{0.45cm}
+{\Large\bfseries\ReportTitle\par}
+\vspace{0.45cm}
+\hrule
+\vspace{0.55cm}
+\begin{tabular}{@{}ll@{}}
+\textbf{Lecturer} & \LecturerName \\
+\textbf{Student} & \StudentName{} (2352696) \\
+\textbf{Email} & \href{mailto:long.nguyenty@hcmut.edu.vn}{long.nguyenty@hcmut.edu.vn} \\
+\end{tabular}
+\end{minipage}
+
+\vspace{2cm}
+{\small\bfseries Ho Chi Minh City, 20 November 2026\par}
+\end{titlepage}
+\hypersetup{pageanchor=true}
+
+
+\section*{Abstract}
+\addcontentsline{toc}{section}{Abstract}
+This project tests whether a 3D Gaussian Splatting model can use fewer primitives while preserving image quality and yielding an editable mesh. It compares the default gsplat strategy (B00) with A05-Abs, a policy that selects Gaussians for splitting using absolute image-space gradients and a scheduled count ceiling. At 7,000 matched updates, A05-Abs used 45.57--54.56\% fewer Gaussians across four public indoor development scenes and raised mean held-out PSNR by 0.210--0.739 dB. The Bonsai mean depended strongly on one view. Across three Room seeds, the candidate gained an average of 0.674 dB and used 45.6\% fewer primitives. The 700,000 ceiling admitted every eligible parent at the selected Room threshold, while the same ceiling bound all refinement events on the outdoor Garden scene, where the candidate gained 0.365 dB with 75.6\% fewer Gaussians. On a local RealSense D455 segment, the candidate used 62.94\% fewer Gaussians and its mesh's median absolute sensor-depth discrepancy rose from 8.38 to 9.47 cm. All ten raw-mesh edits and the cleaned Room tabletop lift persisted after reopening. Meshes extracted by fusing rendered depth retained open boundaries. The results support a rendering-quality and size advantage on the tested public scenes and demonstrate local editability. Independent physical surface accuracy remains unresolved.\par
+\textbf{Keywords} 3D Gaussian Splatting, adaptive densification, RGB-D reconstruction, volumetric fusion, mesh editing\par
+\clearpage
+\begingroup\fontsize{9.5}{11}\selectfont\setlength{\parskip}{0pt}\tableofcontents\endgroup
+\clearpage
+\phantomsection\addcontentsline{toc}{section}{List of Figures}
+\listoffigures
+\clearpage
+\phantomsection\addcontentsline{toc}{section}{List of Tables}
+\listoftables
+\clearpage
+\input{introduction}
+\clearpage
+\input{theory}
+\clearpage
+\input{methodology}
+\clearpage
+\section{Implementation and Experimental Evaluation}
+\subsection{Workstation, scenes and protocol}
+The recorded workstation used Windows, an AMD Ryzen 5 3500, approximately 16 GiB system RAM and a GTX 1660 SUPER with 6 GiB device memory. The documented software environment includes Python 3.12.10, PyTorch 2.9.1+cu128, CUDA Toolkit 12.8.93 and a locally modified gsplat 1.6.0. Open3D 0.20.0 performed mesh cleanup and Blender 4.5.4 LTS performed the edits. These versions describe the recorded environment. Per-run configurations and hashes identify the experiments [\hyperlink{evE3}{E3}, \hyperlink{evE4}{E4}, \hyperlink{evE6}{E6}].\par
+\begin{center}\begin{minipage}{\linewidth}
+\centering\small\setlength{\tabcolsep}{4pt}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lrrrl@{}}
+\toprule
+\textbf{Scene} & \textbf{Fitting / evaluation} & \textbf{RGB resolution} & \textbf{Initial primitives} & \textbf{Input geometry} \\
+\midrule
+Room & 272 / 39 & 1557 \ensuremath{\times} 1038 & 112,627 & Supplied SfM \\
+Counter & 210 / 30 & 1558 \ensuremath{\times} 1038 & 155,767 & Supplied SfM \\
+Kitchen & 244 / 35 & 1558 \ensuremath{\times} 1039 & 241,367 & Supplied SfM \\
+Bonsai & 255 / 37 & 1559 \ensuremath{\times} 1039 & 206,613 & Supplied SfM \\
+Museum matte & 21 / 3 & 834 \ensuremath{\times} 463 & 90,000 & Local RGB-D map \\
+\midrule
+Garden (follow-up) & 161 / 24 & 1297 \ensuremath{\times} 840 & 138,766 & Supplied SfM \\
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Datasets, image splits and initial Gaussian counts]{Datasets and initialized primitive counts for the five primary pairs and the separate Garden follow-up. Public images are from Mip-NeRF 360. Museum frames are from the personal D455 recording.}\label{table2}
+\end{minipage}\end{center}
+Figure~\ref{figure5} shows one evaluation photograph from each of the five primary pairs. Each primary pair used 7,000 updates, seed 42, batch size one, packed rendering and spherical harmonics up to degree three. The refinement window ran at zero-based loop indices 600 through 5,900 in steps of 100. Opacity was reset at index 3,000. The candidate ceiling was 700,000 public and 180,000 matte. Public scenes used RGB supervision. Matte fitting frames span 6.008--13.817 seconds, with all three evaluation images inside that interval (Table~\ref{table2}). The 7,000-update comparison uses previously inspected development views, and its evidence is restricted to these scenes [\hyperlink{evE4}{E4}].\par
+\reportfigure[Evaluation photographs from the five primary scene pairs]{0.95\linewidth}{figures/scene_photos.jpg}
+  {Held-out photographs from the four indoor public scenes and the personal matte segment. The panels use the first evaluation target of each scene and are resized for display. Their resolutions and training conditions are given above.}{figure5}
+\subsection{Evaluation criteria}
+For normalized RGB, $\mathrm{PSNR}=-10\log_{10}(\mathrm{MSE})$ measures pixel fidelity in decibels. SSIM measures structural similarity \cite{ref10} and LPIPS compares learned image features \cite{ref11}. Higher PSNR and SSIM and lower LPIPS favor an arm. We use the final trainer averages over the same images. Raw surface evaluation counts edge-connected triangle components and edges with exactly one incident triangle. Depth discrepancy compares camera-axis depth on pixels observed by both methods. Reopening an edit tests a distinct operational outcome by checking whether a selected patch still moves in a design tool [\hyperlink{evE4}{E4}, \hyperlink{evE6}{E6}].\par
+\clearpage
+\subsection{Rendering quality and representation size}
+\begin{center}\begin{minipage}{\linewidth}
+\centering\small\setlength{\tabcolsep}{4pt}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrrr@{}}
+\toprule
+\textbf{Scene} & \textbf{Arm} & \textbf{PSNR (dB)} & \textbf{SSIM} & \textbf{LPIPS} & \textbf{Gaussians} \\
+\midrule
+Room & B00 & 29.998 & 0.90168 & 0.20973 & 831,326 \\
+Room & A05-Abs & 30.737 & 0.90915 & 0.19206 & 452,485 \\
+\addlinespace[2pt]
+Counter & B00 & 27.630 & 0.88807 & 0.19537 & 742,755 \\
+Counter & A05-Abs & 27.840 & 0.88954 & 0.18812 & 381,228 \\
+\addlinespace[2pt]
+Kitchen & B00 & 29.916 & 0.91564 & 0.11661 & 1,082,362 \\
+Kitchen & A05-Abs & 30.212 & 0.91519 & 0.11521 & 502,536 \\
+\addlinespace[2pt]
+Bonsai & B00 & 30.055 & 0.92395 & 0.16005 & 1,020,333 \\
+Bonsai & A05-Abs & 30.391 & 0.92838 & 0.15284 & 463,678 \\
+\addlinespace[2pt]
+Matte & B00 & 28.872 & 0.88327 & 0.18209 & 485,156 \\
+Matte & A05-Abs & 28.891 & 0.88560 & 0.18964 & 179,792 \\
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Held-out RGB quality and final Gaussian counts]{Mean held-out RGB scores and final Gaussian counts at 7,000 updates. Higher PSNR and SSIM and lower LPIPS indicate better image agreement.}\label{table3}
+\end{minipage}\end{center}
+Figure~\ref{figure6} summarizes the paired count and PSNR differences in Table~\ref{table3}. All four public pairs favored A05-Abs in PSNR and LPIPS. Room gained 0.739 dB with 378,841 fewer primitives. Kitchen used 53.57\% fewer primitives and gained 0.297 dB, although SSIM fell by 0.00045. Across the public scenes, lower primitive count coincided with higher pixel fidelity. The much smaller matte PSNR change, 0.019 dB, accompanied worse LPIPS. Pooling those conditions would obscure the different source of depth information and the small personal evaluation set [\hyperlink{evE4}{E4}].\par
+\reportfigure[Gaussian count reduction and PSNR change by scene]{0.95\linewidth}{figures/count_psnr.png}
+  {Matched effect of A05-Abs relative to B00. Left, percentage reduction in final Gaussian count. Right, difference in mean held-out PSNR. Each row compares the same scene and training camera sequence. Matte uses depth supervision in both arms.}{figure6}
+\clearpage
+\subsection{Photographs and novel-view renders}
+The shared validation targets allow direct inspection of what a scalar RGB score averages over. Figure~\ref{figure7} uses the identical photograph and the same source pixels in both models. Both models recover the plant silhouette. In the enlarged crop, the leaf edges and the cabinet seam behind the plant appear softer than in the photograph. The crop preserves the same field of view across the three panels, and the numerical interpretation uses all 39 views [\hyperlink{evE4}{E4}].\par
+\reportfigure[Room photograph and novel-view renderings]{0.91\linewidth}{figures/room_rgb.jpg}
+  {Public Room held-out view DSCF4891.JPG. Columns show the photograph, the default model and the budgeted model. The upper row locates the plant, and the lower row enlarges the same crop in each image. These are Gaussian RGB renderings before meshing.}{figure7}
+Figure~\ref{figure8} asks a different question of the same learned representation. Ray casting a triangle mesh exposes missing surface coverage along the museum doorway and the display-case edges. Both methods recover broad panel outlines, while color and fine lettering blur. The candidate leaves a larger opening to the left of the doorway in the first reserved frame. A small gain in mean RGB PSNR can therefore coexist with a visible loss in an extracted surface [\hyperlink{evE4}{E4}].\par
+\reportfigure[Museum doorway in the photograph and both raw meshes]{0.98\linewidth}{figures/matte_mesh.jpg}
+  {Personal matte segment, held-out frame rgb\_0006487.png. Left to right, the recorded RGB image, B00 raw mesh and A05-Abs raw mesh rendered from the same pose. The bright doorway makes the broken surface boundary visible.}{figure8}
+\clearpage
+\input{view_analysis}
+\clearpage
+\subsection{Computation and storage}
+\begin{center}\begin{minipage}{\linewidth}
+\centering\small\setlength{\tabcolsep}{4pt}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrrrr@{}}
+\toprule
+\textbf{Scene} & \textbf{Arm} & \textbf{Train (s)} & \textbf{Extract (s)} & \textbf{Peak (GiB)} & \textbf{Render (fps)} & \textbf{File (MiB)} \\
+\midrule
+Room & B00 & 424.6 & 8.62 & 1.300 & 75.4 & 187.1 \\
+Room & A05-Abs & 394.8 & 8.16 & 0.971 & 111.0 & 101.8 \\
+\addlinespace[2pt]
+Counter & B00 & 441.7 & 13.28 & 1.185 & 57.8 & 167.2 \\
+Counter & A05-Abs & 432.8 & 10.72 & 0.945 & 92.8 & 85.8 \\
+\addlinespace[2pt]
+Kitchen & B00 & 560.2 & 16.27 & 1.707 & 44.6 & 243.6 \\
+Kitchen & A05-Abs & 469.8 & 12.96 & 1.077 & 67.4 & 113.1 \\
+\addlinespace[2pt]
+Bonsai & B00 & 449.6 & 16.65 & 1.588 & 58.3 & 229.6 \\
+Bonsai & A05-Abs & 398.8 & 16.83 & 1.006 & 118.5 & 104.4 \\
+\addlinespace[2pt]
+Matte & B00 & 214.5 & 4.40 & 0.756 & 146.1 & 109.2 \\
+Matte & A05-Abs & 190.6 & 4.51 & 0.342 & 249.7 & 40.5 \\
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Computation, memory, rendering throughput and storage]{Observed runtime, peak tensor allocation, evaluation render throughput and checkpoint size. Each row describes one run.}\label{table4}
+\end{minipage}\end{center}
+In Table~\ref{table4}, extraction includes loader and checkpoint setup, rendering, fusion, export and internal checks. Training time uses the trainer loop through the last update, including the initial evaluation. Peak memory is the trainer's maximum PyTorch tensor allocation. Render rate is the reciprocal of mean CUDA-synchronized render-call time on the final evaluation images at their listed resolutions. File size is the byte length of the Gaussian checkpoint passed to extraction, divided by $2^{20}$. These quantities describe distinct parts of the system [\hyperlink{evE4}{E4}].\par
+The Room checkpoint fell from 187.1 to 101.8 MiB, and the timed render call rose from 75.4 to 111.0 frames/s. The latter rates exclude image loading, display, encoding and viewer interaction. A05-Abs reduced peak tensor allocation on every scene. Extraction time did not follow count as closely: the same grid still had to be fused and meshed, and Bonsai took 16.83 s with A05-Abs versus 16.65 s with B00. The archived Bonsai baseline used four data workers and the candidate used zero, so its timing also includes a loader difference [\hyperlink{evE4}{E4}]. Figure~\ref{figure9} explains why Room finished far below the scheduled ceiling. At the last refinement event, 1,958 eligible parents split and 301 primitives were pruned, giving 452,485 live Gaussians [\hyperlink{evE3}{E3}, \hyperlink{evE4}{E4}].\par
+\reportfigure[Room Gaussian count and scheduled ceiling during refinement]{0.79\linewidth}{figures/growth.png}
+  {Public Room, seed 42. The dashed curve shows the scheduled growth ceiling. The solid curve shows the count after each recorded A05-Abs refinement event, including pruning. The gap reflects the eligibility-limited allocation in this run.}{figure9}
+\clearpage
+\input{allocation_results}
+\clearpage
+\input{followup_results}
+\clearpage
+\subsection{Earlier allocation and surface-prior controls}
+An earlier study compared the budgeted signed-gradient predecessor A04 with B00 across three paired seeds on all four public scenes. Mean count fell by 24.25--35.27\% and mean PSNR rose on each scene. The paired intervals for Kitchen and Bonsai included zero. A second study compared A05-Abs directly with A04 on Room, Counter and Kitchen at seeds 42 and 43. Counts fell and PSNR rose in all six comparisons. Five passed the predeclared criteria of at least +0.05 dB PSNR, at most 0.001 SSIM loss and at most 0.001 LPIPS increase. Counter at seed 43 gained 0.04191 dB. As Figure~\ref{figure10} shows, the two Counter estimates straddle the threshold [\hyperlink{evE3}{E3}].\par
+\reportfigure[Absolute-gradient comparison with the signed-gradient predecessor]{0.84\linewidth}{figures/ablation.png}
+  {A05-Abs versus its budgeted predecessor A04. Each symbol is one paired difference at 7,000 updates. The dashed line marks the PSNR part of the acceptance criterion. Counter at seed 43 falls below it. Measurements come from the paired absolute-gradient study.}{figure10}
+On Room, adding an edge-aware log-depth curvature penalty at weight 0.01 from update 3,000 lowered the reduced model's common-support curvature by 3.06\%. Its raw mesh nevertheless rose from 1,162 to 1,216 components and from 16,807 to 17,700 boundary edges. Table~\ref{table5} shows the same prior applied to the baseline. The opposite changes in component count across the two model families motivated retaining the no-prior candidate. A smoothness penalty can reduce a depth derivative while leaving the continuity of the extracted surface unresolved [\hyperlink{evE5}{E5}].\par
+\begin{center}\begin{minipage}{\linewidth}
+\centering\small\setlength{\tabcolsep}{4pt}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lrrrrr@{}}
+\toprule
+\textbf{Room model} & \textbf{Prior weight} & \textbf{PSNR (dB)} & \textbf{LPIPS} & \textbf{Gaussians} & \textbf{Components} \\
+\midrule
+B00 & 0 & 29.99812 & 0.209726 & 831,326 & 1,241 \\
+B00 & 0.01 & 30.05953 & 0.210307 & 827,764 & 1,131 \\
+A05-Abs & 0 & 30.73701 & 0.192058 & 452,485 & 1,162 \\
+A05-Abs & 0.01 & 30.73650 & 0.191455 & 450,398 & 1,216 \\
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Effect of the depth-curvature penalty on Room]{Room ablation at seed 42. The curvature penalty reduces fragmentation on B00 and increases it on the reduced model.}\label{table5}
+\end{minipage}\end{center}
+\clearpage
+\input{surface_analysis}
+\clearpage
+\subsection{Raw surface quality}
+\begin{center}\begin{minipage}{\linewidth}
+\centering\small\setlength{\tabcolsep}{4pt}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrr@{}}
+\toprule
+\textbf{Scene} & \textbf{Arm} & \textbf{Triangles} & \textbf{Components} & \textbf{Boundary edges} \\
+\midrule
+Room & B00 & 119,613 & 1,241 & 18,165 \\
+Room & A05-Abs & 119,987 & 1,162 & 16,807 \\
+\addlinespace[2pt]
+Counter & B00 & 158,759 & 2,606 & 33,559 \\
+Counter & A05-Abs & 163,497 & 2,443 & 33,701 \\
+\addlinespace[2pt]
+Kitchen & B00 & 70,332 & 661 & 6,446 \\
+Kitchen & A05-Abs & 82,518 & 944 & 9,148 \\
+\addlinespace[2pt]
+Bonsai & B00 & 322,809 & 5,364 & 66,045 \\
+Bonsai & A05-Abs & 320,840 & 4,859 & 64,084 \\
+\addlinespace[2pt]
+Matte & B00 & 80,952 & 973 & 13,300 \\
+Matte & A05-Abs & 99,107 & 1,448 & 21,023 \\
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Raw mesh topology at matched extraction settings]{Raw TSDF mesh topology at matched per-scene extraction settings. Component counts refer to edge-connected triangles.}\label{table6}
+\end{minipage}\end{center}
+Across the ten raw meshes in Table~\ref{table6}, no edge had more than two incident triangles. Their open boundaries rule out watertightness. A separate Open3D readback also failed vertex manifoldness on every raw mesh and the cleaned Room mesh. All passed the orientability check. Their largest edge-connected components covered 82.8--95.6\% of raw mesh area. Room and Bonsai had fewer components and boundary edges with A05-Abs, while Kitchen and matte had more of both. Counter had fewer components and slightly more boundary edges. Figure~\ref{figure11} shows the relative changes. The counts include intended objects as well as fragments [\hyperlink{evE4}{E4}, \hyperlink{evE11}{E11}].\par
+\reportfigure[Change in raw mesh topology across five scenes]{0.95\linewidth}{figures/topology.png}
+  {Change in raw mesh topology under identical per-scene extraction settings. Bars show percentage change from B00. An increase in boundary edges indicates more exposed triangle borders, whose location and cause require visual inspection.}{figure11}
+On Kitchen, both meshes preserve the outline of the toy bulldozer but merge tread detail. Bonsai blossoms merge into larger surfaces, and background bicycle details break apart. On Room the largest structures remain recognizable even where thin supports fail. These observations are consistent with averaging depths at mixed pixels and sampling them on a finite grid. Section~\ref{sec:grid-results} probes grid sensitivity while holding the two matte checkpoints fixed [\hyperlink{evE4}{E4}].\par
+\clearpage
+\subsection{Measured-depth consistency in the museum}
+Three reserved depth messages supplied 977,442 valid depth pixels between 0.3 and 6 m. A local 3 \ensuremath{\times} 3 range filter retained 918,331 stable pixels out of 1,158,426 total image pixels. Each method's coverage is reported against this stable set. Discrepancies are pooled over the exact pixels shared by the pair: 916,892 for Gaussian depth and 881,411 for raw mesh first hits. Table~\ref{table7} summarizes the resulting discrepancies. Negative signed discrepancy means the prediction is closer to the camera than the aligned sensor measurement [\hyperlink{evE2}{E2}, \hyperlink{evE4}{E4}].\par
+\begin{center}\begin{minipage}{\linewidth}
+\centering\small\setlength{\tabcolsep}{4pt}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrrr@{}}
+\toprule
+\textbf{Prediction} & \textbf{Arm} & \textbf{Coverage} & \textbf{Signed med. (cm)} & \textbf{Abs. med. (cm)} & \textbf{Abs. P90 (cm)} \\
+\midrule
+Gaussian expected depth & B00 & 99.95\% & \ensuremath{-}6.64 & 7.37 & 21.62 \\
+Gaussian expected depth & A05-Abs & 99.88\% & \ensuremath{-}7.33 & 7.97 & 21.25 \\
+Raw mesh first hit & B00 & 97.30\% & \ensuremath{-}8.32 & 8.38 & 20.20 \\
+Raw mesh first hit & A05-Abs & 97.82\% & \ensuremath{-}9.34 & 9.47 & 20.28 \\
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Gaussian and mesh depth against the matte sensor observations]{Held-out sensor agreement in the matte segment. Coverage uses all stable pixels. Discrepancies use the common support within each output pair.}\label{table7}
+\end{minipage}\end{center}
+The candidate mesh covered 0.52 percentage points more stable depth, yet its median absolute discrepancy increased by 1.09 cm. The median worsened on each reserved view. Gaussian expected depth and mesh first-hit depth answer different questions near transparent layers and gaps, which is why both appear in the table. Neither provides an independent physical reference: the scale, calibration and camera estimates derive from the same capture system [\hyperlink{evE4}{E4}].\par
+A whole-route diagnostic screened 317 eligible museum intervals. Only 132 passed, and none of the 185 failed intervals passed on retry. A source-following holdout later distinguished a passing matte control from a difficult target that still failed reprojection. This justified restricting the paired depth experiment to local matte surfaces. Reconstruction of the complete museum remains deferred. An older comparison on a separate RealSense sequence improved PSNR from 18.887 to 20.300 dB on the same 79 targets when sampling, matching and pose recovery changed together. It does not identify a frame-rate-only effect [\hyperlink{evE2}{E2}, \hyperlink{evE7}{E7}].\par
+\clearpage
+\input{geometry_results}
+\subsection{Editing trials across scenes}
+For each of the ten raw meshes, Blender selected a connected patch within four voxels of a corresponding ray hit. The same task displaced it toward the camera with a peak offset of half a voxel. All ten saved files reopened and retained displaced vertices. Both public Room meshes moved 108 vertices at the corresponding coffee-table patch. On matte, B00 moved 97 and A05-Abs moved 84. A selected patch can remain editable on a fragmented mesh. The test establishes local edit persistence at those locations [\hyperlink{evE4}{E4}].\par
+\subsection{Public Room from raw mesh to design edit}
+A separate Room experiment took the fixed A05-Abs raw PLY, removed small connected fragments satisfying both a face-count and an area threshold, then applied quadric decimation. Raw, filtered and cleaned meshes contained 119,987, 119,454 and 77,624 triangles respectively. The final mesh retained 748 components and 13,386 boundary edges, down from 1,162 and 16,807. Filtering and simplification reduced complexity while leaving open surfaces visible [\hyperlink{evE6}{E6}].\par
+\reportfigure[Room silhouettes and mesh depth before and after cleanup]{0.86\linewidth}{figures/room_cleanup.png}
+  {Public Room silhouette comparison at matched held-out camera crops. Each row shows one subject. Columns compare the photograph, raw and cleaned vertex colors, and raw and cleaned mesh depth. Inspect the broad table edge, the potted leaves and the thin footstool supports.}{figure12}
+In the coffee-table crop of Figure~\ref{figure12}, cleanup changed zero hit pixels out of 96,292. The foliage crop lost 374 and gained 17. Thin footstool supports were already incomplete before simplification. A scripted Blender operation then lifted a connected 14-vertex patch on the front-left tabletop. Figure~\ref{figure13} shows the edited patch. The reopened shape key retained a peak displacement of 0.040 normalized scene units in +Z at unit object scale. Attribution of physical dimensions would require a metric reference for public Room [\hyperlink{evE6}{E6}].\par
+\reportfigure[Tabletop patch before and after the Blender edit]{0.67\linewidth}{figures/tabletop_edit.jpg}
+  {Before and after the tabletop edit, rendered in Blender from the same camera. The highlighted patch in the reopened file identifies the edited vertices. The logged vertex displacement confirms the geometric change independently of the highlight.}{figure13}
+\clearpage
+\input{validity}
+\clearpage
+\input{conclusion}
+\clearpage
+\input{reproduction}
+
+\clearpage
+\input{evidence_register}
+\clearpage\phantomsection\addcontentsline{toc}{section}{References}
+\input{references}
+\label{report-end}
+\end{document}

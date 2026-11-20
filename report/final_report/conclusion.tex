@@ -1,0 +1,18 @@
+\section{Conclusion and Future Work}
+\subsection{Representation efficiency}
+Across the four indoor development scenes, A05-Abs used 45.57--54.56\% fewer Gaussians and gained 0.210--0.739 dB at equal updates. Removing Bonsai's largest gain changed its quantized mean difference from $+0.337$ to $-0.023$ dB. In Room the selected 452,409-Gaussian model scored 30.757 dB. A lower threshold bought higher PSNR at a larger count, and a binding 400,000 cap gave a smaller model at 30.706 dB. The selected variant also led PSNR at the three common time probes [\hyperlink{evE4}{E4}, \hyperlink{evE8}{E8}, \hyperlink{evE11}{E11}].
+
+The Room gain repeated across three seeds. In Garden, the frozen policy gained 0.365 dB with 75.6\% fewer primitives and a binding 700,000 ceiling. This extends the measured trade-off to one outdoor scene in the same benchmark family [\hyperlink{evE12}{E12}].
+
+\subsection{Allocation and implementation}
+The selected Room run admitted every eligible parent. The gradient and split studies support the choice of eligibility rule and split operator, although their interaction under absolute gradients remains open. At the tighter 400,000 cap, removing either ranking cue changed which parents could split and produced mixed RGB results. The study therefore retains the full policy as its reference [\hyperlink{evE3}{E3}, \hyperlink{evE8}{E8}].
+
+\subsection{Surface reconstruction and editing}
+All ten primary benchmark arms yielded polygon meshes. On Room, the depth-curvature penalty reduced the candidate's curvature proxy by 3.06\% but increased the number of mesh components from 1,162 to 1,216. The final candidate therefore omits the penalty [\hyperlink{evE5}{E5}]. Room and Bonsai had lower raw component and boundary counts with the candidate, while Kitchen and the museum matte segment showed the reverse. The matte mesh covered slightly more stable depth, yet its median absolute sensor discrepancy rose from 8.38 to 9.47 cm on the original paired mesh support. The median discrepancy was already larger before fusion and persisted across all three grid resolutions. Physical surface accuracy remains unverified [\hyperlink{evE4}{E4}, \hyperlink{evE9}{E9}].
+
+All ten matched raw-mesh edits persisted after reopening. The separate cleaned public Room demonstration and the fresh replay both preserved the tabletop lift in Blender, at $0.040$ normalized units. Open boundaries remain in the edited asset. These tests establish local edit persistence [\hyperlink{evE6}{E6}, \hyperlink{evE10}{E10}].
+
+\subsection{Follow-up experiments}
+Run the frozen policy on a second dataset family and vary the split operator and ranking jointly under absolute gradients. Repeated measurements on another GPU would quantify hardware-dependent training time.
+
+Evaluate completeness and dimensional error against surveyed geometry with known scale, including depth edges filtered from the matte comparison. Vary render resolution, fusion truncation and crop independently at fixed checkpoints. Verify additional editing operations with explicit dimensional tolerances.

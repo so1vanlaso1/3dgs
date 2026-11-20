@@ -1,0 +1,65 @@
+\subsection{Controlled Room study}\label{sec:room-study}
+The follow-up replays 7,000 fitting updates at seed 42 with the current code, the archived fitting camera order and the same 39 evaluation targets. Both primary arms use zero loader workers. All roles share the same fitting objective, initialization and camera order. Every arm is audited against the known initializer and the target RGB hashes. This study is a new measurement. The original five-scene comparisons above retain their own endpoint values, and comparisons in this section use only runs from the same replay.
+
+The Room protocol crosses gradient aggregation (signed or absolute) with eligibility threshold ($2\times10^{-4}$ or $8\times10^{-4}$) under the same cap, ranking and split operator. It also disables RGB-error attribution and edge strength one at a time. Three cap settings measure the realized size and quality at the default absolute threshold. The cap sweep showed that the 700,000 ceiling did not restrict A05-Abs selection on Room. Two additional runs remove each ranking term at the binding 400,000 cap, where the remaining scores decide which eligible parents receive the available slots.
+
+\subsubsection{Matched updates and elapsed training time}
+The main pair also evaluates after updates 1, 1,000, 2,000, \ldots, 7,000 and at target elapsed times 90, 180 and 270 seconds. Time starts at the training loop after loading and initialization. CUDA synchronization measures completed work. Deadline checks occur at 10-update intervals, and elapsed time excludes evaluation. Each sample is taken just after crossing its time target. Table~\ref{tab:matched-time} reports the actual times and counts. The same elapsed budget can correspond to a different number of optimizer updates. Figure~\ref{fig:room-progress} plots the trajectories.
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}rlrrrrrr@{}}
+\toprule
+Target (s) & Arm & Actual (s) & Updates & PSNR (dB) & SSIM & LPIPS & Gaussians\\
+\midrule
+\inputrows{evidence/room_time_rows.tex}
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Room results at matched elapsed training times]{Public Room at shared elapsed training targets. Time excludes interleaved evaluation.}\label{tab:matched-time}
+\end{minipage}\end{center}
+
+\reportfigure[Room learning curves by update count and elapsed time]{0.98\linewidth}{figures/room_progress.pdf}
+  {Room learning trajectories. The update panel uses fixed update milestones. The time panel uses the actual seconds measured near the three common deadlines. Both evaluate the same 39 development views. The update panel omits the nearly identical first-update scores to show the later differences.}{fig:room-progress}
+\input{room_time_interpretation}
+
+\subsubsection{Gradient aggregation, threshold and ranking}
+For a metric $M$, let $M_{a,h}$ denote the absolute-gradient result at the higher threshold, with $s$ denoting signed and $l$ the lower threshold. The effect of changing aggregation at fixed high threshold is $M_{a,h}-M_{s,h}$. The threshold effect within absolute gradients is $M_{a,h}-M_{a,l}$. The interaction is $(M_{a,h}-M_{s,h})-(M_{a,l}-M_{s,l})$. Table~\ref{tab:room-components} gives the four single-seed arms. Table~\ref{tab:tight-ranking} repeats the ranking contrasts at a binding ceiling. Counts and appearance jointly reflect the accumulated changes to eligibility and parent ranking.
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrrrr@{}}
+\toprule
+Policy & Aggregation & Threshold & PSNR (dB) & SSIM & LPIPS & Gaussians\\
+\midrule
+\inputrows{evidence/room_component_rows.tex}
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Room gradient and ranking ablations at a 700,000 cap]{Room gradient-by-threshold factorial and image-ranking ablations at a 700,000-Gaussian cap. All rows use Long-Axis Split and 7,000 updates.}\label{tab:room-components}
+\end{minipage}\end{center}
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lrrrrr@{}}
+\toprule
+Ranking policy & Binding events & PSNR (dB) & SSIM & LPIPS & Gaussians\\
+\midrule
+\inputrows{evidence/room_ranking_rows.tex}
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Ranking ablations at a binding 400,000 cap]{Ranking ablations at the binding 400,000-Gaussian cap. All arms use absolute gradients and threshold $8\times10^{-4}$.}\label{tab:tight-ranking}
+\end{minipage}\end{center}
+\input{room_component_interpretation}
+
+\subsubsection{Gaussian cap and realized count}\label{sec:room-caps}
+Sweeping the cap tests how the same strategy behaves under different count ceilings. Each setting uses the same gradient definition and threshold, ranking, split operation and 7,000 training updates. The cap changes the event targets throughout training. It can alter which parents survive and compete later, so two similar endpoints can still arise through different trajectories. The baseline contributes one unrestricted endpoint for context.
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lrrrrr@{}}
+\toprule
+Arm & Cap & Gaussians & PSNR (dB) & SSIM & LPIPS\\
+\midrule
+\inputrows{evidence/room_cap_rows.tex}
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Room cap sweep at equal update count]{Room cap sweep at equal update count. The final count is the measured model size.}\label{tab:room-caps}
+\end{minipage}\end{center}
+
+\reportfigure[Room PSNR against realized Gaussian count]{0.92\linewidth}{figures/room_cap_tradeoff.pdf}
+  {Room quality against realized Gaussian count at 7,000 updates. The three budgeted points highlight the tighter cap, the selected high threshold and the low threshold. Table~\ref{tab:room-caps} also gives the 1,000,000-ceiling control, which overlaps the selected operating point at this scale.}{fig:cap-tradeoff}
+\input{room_cap_interpretation}

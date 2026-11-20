@@ -1,0 +1,115 @@
+\section{Theoretical Background and Related Work}
+\subsection{Camera projection and coordinate frames}
+Let $X_w$ be a point in world coordinates. A calibrated camera stores the transformation from world to camera coordinates as $X_c=R_{cw}X_w+t_{cw}$. The translation in this expression is the position of the world origin in camera coordinates. The camera center in the world is $-R_{cw}^{\top}t_{cw}$. For the undistorted pinhole case, with $X_c=(x,y,z)^\top$ and $z>0$, the projective relation is
+\begin{equation}
+  z\begin{bmatrix}u\\v\\1\end{bmatrix}
+  = KX_c,\qquad
+  K=\begin{bmatrix}f_x&0&c_x\\0&f_y&c_y\\0&0&1\end{bmatrix}.
+  \label{eq:project}
+\end{equation}
+Here $u=f_x x/z+c_x$ and $v=f_y y/z+c_y$. The intrinsics set the mapping between image and camera coordinates. The extrinsics set the mapping between cameras and the world. Distorted cameras require a calibrated distortion model or prior undistortion. When image dimensions change, the corresponding rows of $K$ scale with the width and height ratios. Mixing resolutions without that adjustment changes the ray direction for the same imaged feature.
+
+Backprojection at a known camera-axis depth $z$ gives $X_c=zK^{-1}(u,v,1)^\top$. The last component of the unnormalized ray direction is one. The ray parameter is then camera $z$ even away from the principal point. A unit direction instead parameterizes distance along the ray, which is larger than $z$ away from the center. The evaluation uses camera-axis depth throughout. For relative transforms between two cameras, the source sample is backprojected, moved through the relative rigid transform, then reprojected with the target camera intrinsics. This gives the geometric basis of sensor-to-color alignment and track-based checks.
+
+Under a camera similarity transform a normalized position has the form $X'=aQX+b$ with $a>0$. Applying this transformation to both the point cloud and camera centers and rotating their coordinate axes preserves the perspective projections. Camera-axis distances scale by $a$. Public SfM is defined up to a similarity. Normalized units therefore support within-model comparisons and reproducible edit offsets; converting an offset to centimeters requires a calibrated scale. In the matte experiment, the metric depth values help estimate the map scale before the loader normalizes the map. The evaluation divides rendered axis depths by the recorded normalization scale to restore sensor units.
+
+\subsection{Structure from Motion, bundle adjustment and depth}
+Structure from Motion estimates camera poses and a sparse 3D structure from overlapping images \cite{ref1}. A feature track links measurements predicted to arise from the same world point. Given an initial relative pose, triangulation finds a point that approximately agrees with those viewing rays. Given initial camera poses and point positions, bundle adjustment refines both by minimizing reprojection error over the observed tracks. With observed feature $u_{ij}$ for point $j$ in camera $i$, a common formulation is
+\begin{equation}
+  \min_{\{R_i,t_i,X_j\}}\sum_{(i,j)\in\mathcal O}
+        \rho\bigl(\|\pi(K_i(R_iX_j+t_i))-u_{ij}\|_2^2\bigr),
+  \label{eq:ba}
+\end{equation}
+where $\pi$ divides the first two homogeneous coordinates by the third. A robust loss $\rho$ limits the influence of large residuals, and an explicit gauge fixes arbitrary global degrees of freedom. The normal equations are sparse because an observation couples one camera and one track. Nearly parallel rays and short baselines can leave poor depth conditioning even when reprojection error is small. Repeated texture can create mutually consistent appearance matches at the wrong locations. Moving people, specular regions and occlusion can violate the assumption of a fixed 3D point.
+
+An aligned RGB-D observation adds a noisy measurement $z_{ij}^{\rm sensor}$ of camera-axis depth. A metric residual compares it to $\mathbf e_3^\top(R_iX_j+t_i)$, scaled by an uncertainty estimate for that observation. A long-range or depth-discontinuity sample can be less informative than a nearby pixel on a stable matte surface. Confidence weights, robust loss and held-out correspondences control different failure modes. The first two govern the fit. The held-out correspondences test consistency of the fitted map on measurements excluded from that fit. The project also reserves depth messages at validation cameras when measuring model depth. Their RGB can localize the camera against the frozen map, so the measurements share the acquisition device and a reference coordinate system.
+
+Aligned depth uses calibration and synchronization in addition to the measurement itself. Given a raw point in the depth camera, the relative rotation and translation map it to the color camera. Projection to color pixels may map several samples to one pixel or leave holes. Calibration errors, scene motion between exposures and mixed optical returns can bias the aligned depth. Fusing more registered observations helps only when their errors and coverage support the same surface. The local matte tests evaluate this restricted case as described in Section~\ref{sec:acquisition}.
+
+\subsection{From volume rendering to explicit Gaussian primitives}
+NeRF parameterizes density $\sigma$ and directional color $c$ with a continuous field \cite{ref3}. For ray $r(t)$ and near/far range $[t_n,t_f]$, the foreground color contribution is
+\begin{equation}
+  C(r)=\int_{t_n}^{t_f}\!T(t)\,\sigma(r(t))\,c(r(t),\mathbf d)\,dt,\qquad
+  T(t)=\exp\!\left(-\int_{t_n}^{t}\!\sigma(r(s))\,ds\right).
+\end{equation}
+Discretizing a segment of length $\Delta_i$ with constant $\sigma_i$ gives opacity $1-\exp(-\sigma_i\Delta_i)$. Multiplying by the transmittance through the preceding segments yields the segment weight. Both NeRF and 3DGS use this compositing logic. Their representations differ. NeRF repeatedly queries a field along rays. 3DGS stores explicit primitives and rasterizes their projected footprints \cite{ref4}. The discrete representation allows directly splitting, cloning, pruning and counting primitives.
+
+For Gaussian $i$, let $\mu_i\in\mathbb R^3$ be its center, $R_i$ the rotation from its normalized quaternion, and $S_i=\mathrm{diag}(s_{i1},s_{i2},s_{i3})$ its positive scales. A point at local coordinate $y$ is mapped by $X=\mu_i+R_iS_i y$. If the covariance of $y$ is $I$, the transformed covariance is
+\begin{equation}
+ \Sigma_i=R_iS_iS_i^\top R_i^\top,\qquad
+ g_i(X)=\exp\!\left[-\tfrac12(X-\mu_i)^\top\Sigma_i^{-1}(X-\mu_i)\right].
+\end{equation}
+This convention describes a unit-height Gaussian shape. In training, log-scales are exponentiated and opacity logits are passed through a sigmoid. These parameterizations keep scales positive and activated opacity between zero and one. The renderer evaluates spherical harmonic coefficients at the camera viewing direction to permit view-dependent colors. There are 16 real basis values per color channel at degree three. The feature tensor stores its constant coefficient separately from the rest.
+
+For an intuition for parameter storage, the standard RGB case needs three means, four quaternion entries, three log-scales, one opacity logit and 48 color coefficients per splat. With 32-bit floating-point parameters this is 236 bytes per splat before checkpoint metadata. Two Adam moment tensors can double the parameter-sized part of the optimizer state. Forward and backward buffers add further memory and depend on resolution, overlap and the rendering implementation. Count thus measures one part of the cost, while peak allocated memory and render time measure properties of an actual run.
+
+\subsection{Projection, alpha compositing and expected depth}
+Perspective projection is nonlinear. Let $(x,y,z)$ now denote a Gaussian center in camera coordinates. Linearization of Equation~\ref{eq:project} around the center gives the Jacobian
+\begin{equation}
+ J=\begin{bmatrix}
+ f_x/z &0&-f_xx/z^2\\
+ 0&f_y/z&-f_yy/z^2
+ \end{bmatrix}.
+\end{equation}
+To first order, perturbations are transformed by $JR_{cw}$, so the footprint covariance is $JR_{cw}\Sigma_i R_{cw}^{\top}J^\top$, up to the rasterizer's footprint treatment. The off-diagonal terms determine the orientation of the ellipse. At a pixel, the model multiplies the Gaussian's learned opacity by its evaluated footprint. The CUDA rasterizer bins screen-space footprints into tiles and composites covered pixels in depth order. It evaluates only projected entries that can contribute, and the packed interface records their Gaussian IDs \cite{ref5}.
+
+Let $\alpha_i(p)$ denote the effective alpha and $c_i$ the evaluated color from primitive $i$ in one camera. For front-to-back contributors,
+\begin{align}
+ T_i(p)&=\prod_{j<i}(1-\alpha_j(p)),\qquad w_i(p)=T_i(p)\alpha_i(p),\\
+ A(p)&=\sum_i w_i(p)=1-\prod_i(1-\alpha_i(p)),\\
+ C(p)&=\sum_i w_i(p)c_i+(1-A(p))C_{\rm bg},\\
+ D_{\rm ED}(p)&=\frac{\sum_i w_i(p)z_i}{A(p)}\qquad (A(p)>0).
+ \label{eq:expected-depth}
+\end{align}
+The accumulated alpha equality follows from $T_i-T_{i+1}=T_i\alpha_i$. Expected depth normalizes by accumulated alpha and uses the projected center depths $z_i$. Even at high alpha, a ray can average several layers (Figure~\ref{figure2}). If two weights are 0.60 and 0.30 at depths 1 and 2, the expected depth is $1.33$ despite the nearer contributing layer at 1. Other combinations of opacity and color may produce similar RGB under the available views. The measured RGB objective leaves this ambiguity at mixed pixels.
+
+\reportfigure[Expected depth along a ray with two contributing Gaussians]{0.84\linewidth}{figures/depth_illustration.png}
+  {Projection and depth ambiguity in Gaussian rendering. The two ellipsoids both contribute to one ray. Their normalized expected depth falls between them.}{figure2}
+
+Mesh evaluation uses the first positive triangle intersection along the camera ray. This value is a visibility decision made on the already extracted polygon surface. It is different from the opacity-weighted average on the Gaussian model. A first hit can move toward the camera if fusion bridges a gap with a foreground surface. It can move away from the camera if an expected front surface is missing. Evaluating both quantities against the same sensor source can distinguish disagreement present before extraction from changes associated with the downstream process. Shared support is essential because missing hits alter which surfaces remain in the sample.
+
+\subsection{Densification and gradient cancellation}
+Training alternates continuous optimization of Gaussian parameters with changes to the primitive population. In 3DGS, a high average positional gradient indicates that moving a projected mean may reduce the image objective. The default strategy uses this signal alongside a size threshold to choose cloning or splitting \cite{ref4,ref5}. It also prunes least opaque primitives and limits excessively large ones under its pruning schedule. This feedback creates capacity around areas with fitting pressure, while the final count emerges from the optimization.
+
+For projected mean $m_{iv}$ of primitive $i$ in view $v$, let $b_{ivp}$ denote the contribution of pixel $p$ to the gradient of the objective with respect to that mean. The signed renderer returns $\sum_p b_{ivp}$. If two pixels yield $(g,0)$ and $(-g,0)$, the net is zero even though both pixels exert fitting pressure. AbsGS aggregates component-wise magnitudes before taking a vector norm \cite{ref6}. In the example it yields $(2|g|,0)$. More generally the triangle inequality and monotonicity of the norm imply
+\begin{equation}
+ \left\|\sum_p b_{ivp}\right\|_2
+  \ \leq\ \left\| \sum_p |b_{ivp}| \right\|_2 ,
+\end{equation}
+where the absolute value is applied component by component. This argument holds for identical pixels and Gaussian parameters in one backward pass. Changing the criterion also changes the subsequent population and optimization. A threshold calibrated for signed gradients need not select the same quantity or mix of candidates under absolute accumulation.
+
+Gradient magnitude quantifies a local derivative, while the residual quantifies how far the composite image lies from its target. Several Gaussians can share responsibility for the same residual. An edge map highlights contrast in the target image, including texture, shadows, occlusion and silhouettes. It does not identify which edges represent a physical boundary. The policy combines these cues as a ranking after applying a gradient gate. Section~\ref{sec:allocation} specifies the normalization and allocation steps. Taming 3DGS and Improving Densification provide relevant examples of budget scheduling and contribution-aware densification \cite{ref12,ref7}.
+
+\subsection{Truncated signed distance fusion}
+Given a depth image $D_v$ and a voxel center $X$, let $z_v(X)$ be its axial depth and let $p_v(X)$ be its projection in view $v$. A projective signed distance is proportional to $D_v(p_v(X))-z_v(X)$. A voxel in front of the observed surface has positive distance under this convention. Restricting updates near and in front of the observation avoids treating arbitrarily far occluded space as measured geometry. The scalar field averages observations with limited influence beyond a truncation distance $\tau$. A simplified normalized update is
+\begin{align}
+ F_v(X)&=\mathrm{clip}\bigl((D_v(p_v(X))-z_v(X))/\tau,-1,1\bigr),\\
+ F_{\rm fused}(X)&=\frac{\sum_{v\in\mathcal V(X)}w_v(X)F_v(X)}
+                         {\sum_{v\in\mathcal V(X)}w_v(X)} .
+\end{align}
+The contributing set $\mathcal V(X)$ excludes unsupported and occluded samples according to the integrator. The observed sign change approximates the surface by a zero crossing. Within a cell edge joining opposite signs $f_0$ and $f_1$, the linear estimate lies at a fraction $f_0/(f_0-f_1)$ of the edge. Marching Cubes generates triangles from the sign pattern at each cell's corners and interpolates their vertices along the intersected edges \cite{ref14}. This construction explains why voxel size and valid-view coverage affect connectivity, even when the input Gaussians are fixed \cite{ref9}. Open3D integrates the observations and extracts the triangles. An alternative, Poisson surface reconstruction, estimates an implicit indicator function from consistently oriented surface samples \cite{ref15}. The Gaussian centers in this project carry appearance and opacity, and their covariance axes supply no verified surface normals. Fusing camera depths gives both arms the same observable input to the extractor and allows us to measure how grid spacing affects the result.
+
+An observation can already blur a thin feature due to depth averaging or low-resolution rendering. Fusion can broaden or suppress the feature further if the truncation band covers two nearby surfaces or if a gap spans too few voxels. Conversely, a finer grid can expose holes or tiny fragments that a coarse grid bridges. A denser mesh is therefore an ambiguous outcome. The fixed-checkpoint sweep in Section~\ref{sec:grid-results} changes grid spacing while holding the fusion cameras and truncation distance fixed. It estimates sensitivity to discretization under the existing depth sampling, crop and visibility policy.
+
+\subsection{Related methods and the research gap}\label{sec:related}
+Table~\ref{tab:related} identifies which stages reuse prior methods and which choices are evaluated here. SfM supplies consistency in image projection and sparse structure. NeRF and 3DGS supply view synthesis. AbsGS modifies the statistic used for densification. Budget-aware methods change the distribution of new primitives under resource constraints. Surface-oriented methods constrain the representation or renderer before extracting geometry.
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{.20\linewidth}YY@{}}
+\toprule
+\textbf{Method} & \textbf{Design objective} & \textbf{Relationship to A05-Abs}\\
+\midrule
+COLMAP \cite{ref1} & Incremental calibration and sparse reconstruction from image correspondences & Supplies public camera models and the feature/track framework for local RGB-D pose fitting\\
+NeRF \cite{ref3} & Radiance and density queried along rays & Provides a reference model for compositing and depth ambiguity\\
+3DGS and gsplat \cite{ref4,ref5} & Explicit Gaussian primitives and efficient differentiable rasterization & Shared representation, rendering and optimization infrastructure. The default strategy is B00\\
+AbsGS \cite{ref6} & Absolute per-pixel view-space gradients to reduce cancellation & Uses gsplat's absolute-gradient path as one input to capped candidate selection\\
+Taming 3DGS \cite{ref12} & Budgeted growth using contribution cues, plus renderer optimizations & Related resource objective. The project uses a ceiling that can be underfilled\\
+Improving Densification \cite{ref7} & Edge-aware allocation and Long-Axis Split, with additional pruning and update changes & Adapts its split geometry and uses a local deterministic top-$k$ ranking with a residual term\\
+SuGaR and 2DGS \cite{ref8,ref13} & Surface-aligned primitives or planar splats designed for geometry & Alternatives when geometric constraints are imposed during training. This study compares matched 3DGS arms\\
+Volumetric fusion \cite{ref9} & Combine range observations into an implicit surface & Fuses expected depths rendered from the learned scene after training\\
+\bottomrule
+\end{tabularx}\par
+\captionof{table}[Prior methods and their relationship to the project]{Related methods and their roles in the project.}\label{tab:related}
+\end{minipage}\end{center}
+
+Published methods already address gradient collision, footprint placement and Gaussian budgets. The research gap addressed here is the behavior of a specific integration under matched scene and compute conditions, including the consequences for exported polygons and editing. The study retains the same renderer in both arms and measures the output at multiple stages. It can then attribute some downstream differences to the learned model given the chosen extractor, and measure extraction sensitivity given fixed learned models. It does not compare the proposed allocation method head-to-head with a separate surface-oriented renderer.

@@ -87,6 +87,9 @@ class Config:
     # Replay a saved list of training-set image indices for paired experiments.
     camera_sequence_path: Optional[str] = None
     record_experiment: bool = False
+    # Optional elapsed training-time validation targets on a headless single GPU.
+    # Time spent in validation is excluded. Regular final evaluation still saves RGB pairs.
+    timed_eval_seconds: List[float] = field(default_factory=list)
     # Disable viewer
     disable_viewer: bool = False
     # Path to the .pt files. If provide, it will skip training and run evaluation only.
@@ -918,6 +921,17 @@ class Runner:
 
         # Training loop.
         global_tic = time.time()
+        timed_targets = iter(sorted(set(cfg.timed_eval_seconds)))
+        next_timed_target = next(timed_targets, None)
+        timed_training = next_timed_target is not None
+        eval_seconds = 0.0
+        if timed_training:
+            if not cfg.disable_viewer or not cfg.disable_video or world_size != 1 or cfg.compression:
+                raise ValueError("Timed evaluation requires headless single-GPU training without compression")
+            if any(not math.isfinite(target) or target <= 0 for target in cfg.timed_eval_seconds):
+                raise ValueError("Timed evaluation requires positive finite elapsed targets")
+            torch.cuda.synchronize()
+            timed_tic = time.perf_counter()
         pbar = tqdm.tqdm(range(init_step, max_steps))
         for step in pbar:
             if not cfg.disable_viewer:
@@ -1267,8 +1281,22 @@ class Runner:
             else:
                 assert_never(self.cfg.strategy)
 
-            # eval the full set
-            if step in [i - 1 for i in cfg.eval_steps]:
+            # Sample the same trained trajectory at elapsed-time and update milestones.
+            regular_eval = step + 1 in cfg.eval_steps
+            if timed_training and (regular_eval or (next_timed_target is not None and (step + 1) % 10 == 0)):
+                torch.cuda.synchronize()
+                eval_tic = time.perf_counter()
+                elapsed = eval_tic - timed_tic - eval_seconds
+                while next_timed_target is not None and elapsed >= next_timed_target:
+                    self.eval(
+                        step, stage=f"time{next_timed_target}", save_images=False,
+                        train_seconds=elapsed, target_seconds=next_timed_target,
+                    )
+                    next_timed_target = next(timed_targets, None)
+                if regular_eval:
+                    self.eval(step, save_images=step + 1 == max_steps, train_seconds=elapsed)
+                eval_seconds += time.perf_counter() - eval_tic
+            elif regular_eval:
                 self.eval(step)
                 self.render_traj(step)
 
@@ -1311,7 +1339,10 @@ class Runner:
                        Path(self.ckpt_dir) / "final_post_update.pt")
 
     @torch.no_grad()
-    def eval(self, step: int, stage: str = "val"):
+    def eval(
+        self, step: int, stage: str = "val", *, save_images: bool = True,
+        train_seconds: Optional[float] = None, target_seconds: Optional[float] = None,
+    ):
         """Entry for evaluation."""
         print("Running evaluation...")
         cfg = self.cfg
@@ -1354,16 +1385,14 @@ class Runner:
             ellipse_time += max(time.time() - tic, 1e-10)
 
             colors = torch.clamp(colors, 0.0, 1.0)
-            canvas_list = [pixels, colors]
-
             if world_rank == 0:
-                # write images
-                canvas = torch.cat(canvas_list, dim=2).squeeze(0).cpu().numpy()
-                canvas = (canvas * 255).astype(np.uint8)
-                imageio.imwrite(
-                    f"{self.render_dir}/{stage}_step{step}_{i:04d}.png",
-                    canvas,
-                )
+                if save_images:
+                    canvas = torch.cat([pixels, colors], dim=2).squeeze(0).cpu().numpy()
+                    canvas = (canvas * 255).astype(np.uint8)
+                    imageio.imwrite(
+                        f"{self.render_dir}/{stage}_step{step}_{i:04d}.png",
+                        canvas,
+                    )
 
                 pixels_p = pixels.permute(0, 3, 1, 2)  # [1, 3, H, W]
                 colors_p = colors.permute(0, 3, 1, 2)  # [1, 3, H, W]
@@ -1391,6 +1420,10 @@ class Runner:
                     "num_GS": len(self.splats["means"]),
                 }
             )
+            if train_seconds is not None:
+                stats.update(train_seconds=train_seconds, completed_updates=step + 1)
+            if target_seconds is not None:
+                stats["target_seconds"] = target_seconds
             if cfg.use_color_correction_metric:
                 print(
                     f"PSNR: {stats['psnr']:.3f}, SSIM: {stats['ssim']:.4f}, LPIPS: {stats['lpips']:.3f} "

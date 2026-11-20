@@ -1,0 +1,53 @@
+\section{Introduction}
+\subsection{Motivation and problem statement}
+Photographic reconstruction serves two related tasks. In view synthesis, the system predicts what a scene looks like from another camera. In geometric reconstruction, it estimates where the visible surfaces lie and how they connect. A virtual walkthrough mainly benefits from realistic views and interactive rendering. An editing workflow also needs a polygon asset whose vertices, boundaries and connected regions can be selected and changed. A system that serves both tasks must account for the different evidence required to evaluate them.
+
+Three-dimensional Gaussian Splatting (3DGS) is useful for view synthesis because its explicit primitives are easy to render and can be allocated where the fitted representation needs them \cite{ref4}. The optimization changes both the attributes and the number of these primitives. This creates a resource-allocation problem. More splats require more parameter storage and optimizer state. They also affect the number of projected footprints and their overlap in the renderer. Adding a primitive only pays off when it improves the representation enough to justify these costs. The magnitude of the benefit depends on the scene, the training stage and the allocation criterion.
+
+Converting the resulting representation to polygons adds a second problem. A Gaussian radiance field assigns color and opacity over a volume. The observed RGB image constrains their composite. A mesh requires an explicit choice about the location of the surface and the connectivity of neighboring samples. In the public Room photographs, a coffee table has a broad top, clutter and narrow supports. The renderer can reproduce the tabletop color while the extracted surface joins clutter to the top. The editor then inherits this join. Figure~\ref{figure1} traces one tabletop example through the pipeline.
+
+\reportfigure[From a Room photograph to a reopened tabletop edit]{0.99\linewidth}{figures/teaser.jpg}
+  {Representative public Room result. Left to right, held-out photograph, A05-Abs Gaussian RGB render, extracted mesh and reopened tabletop edit. The first three panels use the same tabletop crop. The ring marks the raw-mesh edit target. The last panel shows a separate edit on the cleaned surface.}{figure1}
+
+This work studies allocation first and tests what the resulting representation supports downstream. A05-Abs combines a count schedule, absolute screen-space positional gradients, image-based ranking and Long-Axis Split inside the existing gsplat training pipeline. The software exports the optimized models and converts their rendered depths into raw meshes. A controlled photo-only benchmark tests representation efficiency. A bounded RGB-D capture adds a same-device depth comparison. Both conditions use a reproducible mesh-editing task.
+
+\subsection{Research questions and success criteria}
+The primary question concerns the trade-off between rendering quality and representation size. At the same update count, can the method achieve equal or better mean held-out RGB quality with fewer Gaussian primitives than the local default trainer? The primary evidence is the paired PSNR and final count per public scene. SSIM and LPIPS indicate whether the direction depends on the image metric. Checkpoint size, tensor allocation and render-call throughput provide separate resource measurements. A matched elapsed-time study compares the two models at common time limits. The Room sweep measures the realized operating points when the gradient threshold or available capacity changes.
+
+The second question concerns the mechanism. How sensitive are those outcomes to the gradient definition, the numerical threshold, the error and edge ranking terms, and the split operator? The combined comparison estimates the effect of changing the whole strategy. The component experiments perturb a smaller part of the strategy with the initializer, camera order, objective and update count fixed. For the earlier A05-Abs study against A04, the practical criterion was a PSNR increase of at least 0.05 dB with SSIM degradation and LPIPS increase each at most 0.001. The new Room screen reports measured effect sizes and count changes for its individual contrasts. The same scene was used during development, so these contrasts diagnose the implementation on that scene.
+
+The third question is whether the compact representation preserves the properties useful for meshing. A successful conversion produces finite vertices and faces, preserves scene coordinates and exports both PLY and OBJ. Component counts, boundary edges and inspected crops characterize fragmentation and detail. On the matte RGB-D segment, camera-axis agreement is measured using reserved depth messages and common valid pixels. Lower absolute discrepancy at a comparable coverage would support improved consistency on that segment. Absolute dimensional accuracy requires an external reference and is outside the evidence collected here.
+
+Table~\ref{table1} summarizes the four comparisons. The fourth question concerns local editability. The operational criterion is a connected patch with nonzero and measurable displacement after a separate process reopens the saved Blender project. Mesh topology, watertightness and accuracy have their own evidence requirements. A file that passes the edit can still contain open boundaries, disconnected fragments or merged thin parts. The experiment records these outcomes separately.
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabularx}{\linewidth}{@{}p{.24\linewidth}YY@{}}
+\toprule
+\textbf{Question} & \textbf{Controlled comparison} & \textbf{Measured outcome}\\
+\midrule
+Representation efficiency & Matched fitting order, targets and optimization horizon & Gaussians, RGB metrics, storage, tensor allocation and render time\\
+Allocation mechanism & Gradient-by-threshold factorial, ranking ablation, cap sweep and earlier split factorial & Paired changes in RGB metrics and final count\\
+Surface reconstruction & Shared fitting cameras and TSDF settings. Separate grid-resolution sensitivity & Coverage, topology, inspected details and paired sensor-depth discrepancy\\
+Local design editing & Connected patch selected and measured after reopening & Persisted displacement, evaluated mesh and file hash\\
+\bottomrule
+\end{tabularx}\par
+\captionof{table}[Research questions, comparisons and outcome measures]{Research questions and the evidence used to answer them.}\label{table1}
+\end{minipage}\end{center}
+
+\subsection{Scope and requirements}
+The main benchmark contains four static or mostly static public indoor scenes from Mip-NeRF 360 \cite{ref2}. Each uses the supplied structure-from-motion model, factor-two photographs and the same split rule across arms. Public Room is the main case for controlled extensions and the complete tabletop example. A separate outdoor Garden test applies the frozen policy to factor-four images from the same dataset family. The museum comparison uses a short RGB-D segment from a personal moving-camera recording. Its three nearby check frames and shared sensor calibration constrain the interpretation of depth disagreement.
+
+The system is designed for a single 6 GiB desktop GPU and approximately 16 GiB of system memory. The training configuration keeps a batch of one camera, uses packed rendering and uses a prepared initializer. A cap on live primitives sets one explicit resource constraint. Working tensors, tile intersections, cached images and exported artifacts have separate memory and storage costs. The extractor uses a bounded dense volume and reduces the spatial resolution of its fitting-camera renders. These choices support repetition on the project workstation.
+
+The public route starts with prepared poses. It measures representation and meshing given that camera model. A separate video route diagnoses camera recovery before training, and the museum route tests local camera fitting with stronger depth provenance. The thesis uses those acquisition trials to state when a matched reconstruction is possible. It treats full-route museum reconstruction as deferred because the local validation cannot establish a globally reliable model.
+
+The project preserves raw source and intermediate outputs alongside derived assets. Rough geometry is useful for diagnosing camera and representation failures. A visually cleaner derivative receives its own record so it can be compared with the raw mesh and reprocessed from the same input. Evaluation source identities and hashes are recorded before pairwise comparisons. This allows an examiner to identify changes introduced by training, extraction and editing separately.
+
+\subsection{Contributions and report organization}
+The first contribution is a documented allocation policy in the native gsplat loop. Its project-specific choices are the event-indexed ceiling, candidate ranking and support discount, integration of the existing absolute gradients, and use of Long-Axis Split for all selected parents. Splatting, absolute-gradient accumulation, Long-Axis Split and volumetric fusion draw on prior work. Section~\ref{sec:related} specifies the relationship to those methods.
+
+The second contribution is a matched evaluation from prepared cameras through trained models and raw meshes. The public comparisons pair initial weights, camera order and validation RGB targets. Component and resource studies on Room examine which results depend on the allocation design or operating point. The matte comparison separates the agreement of Gaussian expected depth from the agreement of mesh first-hit depth. Fixed-checkpoint extractions probe sensitivity to TSDF resolution.
+
+The third contribution is an executable editing workflow backed by independent Blender processes. It records raw and cleaned geometry, a selected edit region and displacement in the reopened file. This workflow addresses a practical handoff from a trained radiance field to an editable polygon asset.
+
+Section 2 develops the camera, radiance field and fusion models. Section 3 gives the training and refinement algorithms and the data contracts between stages. Section 4 presents the paired results, component experiments and the validity limits of each measurement. Section 5 answers the research questions against that evidence. The appendices provide reproduction commands and source records.

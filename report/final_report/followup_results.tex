@@ -1,0 +1,18 @@
+\subsection{Room seed replication and outdoor evaluation}\label{sec:followup}
+The protocol fixed the policy, splits, seeds and outcomes before training. Room seeds 43 and 44 extend the seed-42 replay on the same factor-two split. Garden, outside method selection, uses factor-four images, supplied SfM, seed 42 and 24 reserved views. Each pair shared its initializer, 7,000 fitting indices, target RGB pixels and zero-worker loader. Table~\ref{tab:followup} gives the endpoints. Figure~\ref{fig:paired-followup} plots the paired differences [\hyperlink{evE12}{E12}].
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lrlrrrrr@{}}
+\toprule
+Scene & Seed & Arm & PSNR (dB) & SSIM & LPIPS & Gaussians & Binding events\\
+\midrule
+\inputrows{evidence/followup_rows.tex}
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Paired Room seed replications and outdoor Garden results]{Paired final RGB scores, Gaussian counts and growth events with more eligible parents than slots. The ceiling applies to A05-Abs.}\label{tab:followup}
+\end{minipage}\end{center}
+
+\input{evidence/room_seed_summary}
+\reportfigure[Paired count reductions and PSNR gains on Room and Garden]{0.83\linewidth}{figures/paired_followup.pdf}
+  {A05-Abs relative to B00 at 7,000 updates. Each row pairs the same scene, seed and fitting order. Garden has one outdoor pair at factor four.}{fig:paired-followup}
+\input{followup_interpretation}

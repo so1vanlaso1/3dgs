@@ -1,0 +1,468 @@
+{
+  "B00": {
+    "first": {
+      "psnr": 12.900378227233887,
+      "ssim": 0.5098288655281067,
+      "lpips": 0.8111750483512878,
+      "ellipse_time": 0.007659050134512095,
+      "num_GS": 112627,
+      "train_seconds": 0.909462399999029,
+      "completed_updates": 1
+    },
+    "binding_events": 0,
+    "metrics": {
+      "psnr": 30.124849319458008,
+      "ssim": 0.902320384979248,
+      "lpips": 0.20975257456302643,
+      "ellipse_time": 0.011609988334851388,
+      "num_GS": 834493,
+      "train_seconds": 375.54894469998544,
+      "completed_updates": 7000
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "07471ba4eb80563183589a68a97c8b23dadd2474541ad5f0f389615be08bf42c",
+    "checkpoint_bytes": 196943309,
+    "process_wall_seconds": 444.856211600003,
+    "probes": {
+      "updates": [
+        {
+          "psnr": 12.900378227233887,
+          "ssim": 0.5098288655281067,
+          "lpips": 0.8111750483512878,
+          "ellipse_time": 0.007659050134512095,
+          "num_GS": 112627,
+          "train_seconds": 0.909462399999029,
+          "completed_updates": 1
+        },
+        {
+          "psnr": 25.63092613220215,
+          "ssim": 0.8341253399848938,
+          "lpips": 0.3527066111564636,
+          "ellipse_time": 0.006021762505555764,
+          "num_GS": 171997,
+          "train_seconds": 37.12187020000056,
+          "completed_updates": 1000
+        },
+        {
+          "psnr": 27.8149471282959,
+          "ssim": 0.8701011538505554,
+          "lpips": 0.2792452275753021,
+          "ellipse_time": 0.007983831258920522,
+          "num_GS": 396644,
+          "train_seconds": 80.37991429999965,
+          "completed_updates": 2000
+        },
+        {
+          "psnr": 28.69559097290039,
+          "ssim": 0.8847318887710571,
+          "lpips": 0.24640709161758423,
+          "ellipse_time": 0.009980195607894506,
+          "num_GS": 592684,
+          "train_seconds": 132.8680606999951,
+          "completed_updates": 3000
+        },
+        {
+          "psnr": 28.8297061920166,
+          "ssim": 0.8887895345687866,
+          "lpips": 0.23817415535449982,
+          "ellipse_time": 0.009517675791031275,
+          "num_GS": 625604,
+          "train_seconds": 186.8405047999804,
+          "completed_updates": 4000
+        },
+        {
+          "psnr": 29.543176651000977,
+          "ssim": 0.8960301280021667,
+          "lpips": 0.22372566163539886,
+          "ellipse_time": 0.010802800838763896,
+          "num_GS": 743210,
+          "train_seconds": 246.4709447999885,
+          "completed_updates": 5000
+        },
+        {
+          "psnr": 29.78662109375,
+          "ssim": 0.899128258228302,
+          "lpips": 0.21558257937431335,
+          "ellipse_time": 0.011392703423133263,
+          "num_GS": 834493,
+          "train_seconds": 310.78884509998534,
+          "completed_updates": 6000
+        },
+        {
+          "psnr": 30.124849319458008,
+          "ssim": 0.902320384979248,
+          "lpips": 0.20975257456302643,
+          "ellipse_time": 0.011609988334851388,
+          "num_GS": 834493,
+          "train_seconds": 375.54894469998544,
+          "completed_updates": 7000
+        }
+      ],
+      "timed": [
+        {
+          "psnr": 28.181690216064453,
+          "ssim": 0.8755642771720886,
+          "lpips": 0.26877862215042114,
+          "ellipse_time": 0.008426256668873323,
+          "num_GS": 440143,
+          "train_seconds": 90.07702079999217,
+          "completed_updates": 2200,
+          "target_seconds": 90.0
+        },
+        {
+          "psnr": 28.78044891357422,
+          "ssim": 0.8876529932022095,
+          "lpips": 0.23858356475830078,
+          "ellipse_time": 0.009487280478844276,
+          "num_GS": 610726,
+          "train_seconds": 180.1093832999759,
+          "completed_updates": 3880,
+          "target_seconds": 180.0
+        },
+        {
+          "psnr": 29.723251342773438,
+          "ssim": 0.8983924984931946,
+          "lpips": 0.21954725682735443,
+          "ellipse_time": 0.010994672775268555,
+          "num_GS": 781109,
+          "train_seconds": 270.4598401999865,
+          "completed_updates": 5390,
+          "target_seconds": 270.0
+        }
+      ]
+    }
+  },
+  "A05_absgrad": {
+    "first": {
+      "psnr": 12.90037727355957,
+      "ssim": 0.5098288655281067,
+      "lpips": 0.8111749291419983,
+      "ellipse_time": 0.007759002538827749,
+      "num_GS": 112627,
+      "train_seconds": 0.35789350000050035,
+      "completed_updates": 1
+    },
+    "binding_events": 0,
+    "metrics": {
+      "psnr": 30.757200241088867,
+      "ssim": 0.909082293510437,
+      "lpips": 0.19166338443756104,
+      "ellipse_time": 0.008372282370542869,
+      "num_GS": 452409,
+      "train_seconds": 358.6205424999971,
+      "completed_updates": 7000
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "3b16161cd762aefff06871665b9441c888505cfa89155dc7dd5d176055dde7eb",
+    "checkpoint_bytes": 106771469,
+    "process_wall_seconds": 421.88416399999915,
+    "probes": {
+      "updates": [
+        {
+          "psnr": 12.90037727355957,
+          "ssim": 0.5098288655281067,
+          "lpips": 0.8111749291419983,
+          "ellipse_time": 0.007759002538827749,
+          "num_GS": 112627,
+          "train_seconds": 0.35789350000050035,
+          "completed_updates": 1
+        },
+        {
+          "psnr": 25.969480514526367,
+          "ssim": 0.8367024064064026,
+          "lpips": 0.34587886929512024,
+          "ellipse_time": 0.006733937141222832,
+          "num_GS": 184385,
+          "train_seconds": 42.25703349999094,
+          "completed_updates": 1000
+        },
+        {
+          "psnr": 28.429296493530273,
+          "ssim": 0.876846432685852,
+          "lpips": 0.26362159848213196,
+          "ellipse_time": 0.007676931527944712,
+          "num_GS": 319866,
+          "train_seconds": 93.69221989998186,
+          "completed_updates": 2000
+        },
+        {
+          "psnr": 29.29059410095215,
+          "ssim": 0.8932079672813416,
+          "lpips": 0.22847557067871094,
+          "ellipse_time": 0.008592012601021009,
+          "num_GS": 392811,
+          "train_seconds": 149.481742199976,
+          "completed_updates": 3000
+        },
+        {
+          "psnr": 29.4461727142334,
+          "ssim": 0.8960866928100586,
+          "lpips": 0.22058384120464325,
+          "ellipse_time": 0.007338853982778696,
+          "num_GS": 393505,
+          "train_seconds": 201.42194709997784,
+          "completed_updates": 4000
+        },
+        {
+          "psnr": 30.100391387939453,
+          "ssim": 0.9032449126243591,
+          "lpips": 0.2067643702030182,
+          "ellipse_time": 0.007492328301454201,
+          "num_GS": 425210,
+          "train_seconds": 254.69293669999024,
+          "completed_updates": 5000
+        },
+        {
+          "psnr": 30.324813842773438,
+          "ssim": 0.9059730172157288,
+          "lpips": 0.1986161470413208,
+          "ellipse_time": 0.007884043913621169,
+          "num_GS": 452409,
+          "train_seconds": 308.7484762999957,
+          "completed_updates": 6000
+        },
+        {
+          "psnr": 30.757200241088867,
+          "ssim": 0.909082293510437,
+          "lpips": 0.19166338443756104,
+          "ellipse_time": 0.008372282370542869,
+          "num_GS": 452409,
+          "train_seconds": 358.6205424999971,
+          "completed_updates": 7000
+        }
+      ],
+      "timed": [
+        {
+          "psnr": 28.28074073791504,
+          "ssim": 0.8740617036819458,
+          "lpips": 0.2695331573486328,
+          "ellipse_time": 0.007680263274755233,
+          "num_GS": 319866,
+          "train_seconds": 90.01748059998499,
+          "completed_updates": 1930,
+          "target_seconds": 90.0
+        },
+        {
+          "psnr": 29.0414981842041,
+          "ssim": 0.8907681107521057,
+          "lpips": 0.2289605587720871,
+          "ellipse_time": 0.007159930009108324,
+          "num_GS": 369085,
+          "train_seconds": 180.44450729997698,
+          "completed_updates": 3600,
+          "target_seconds": 180.0
+        },
+        {
+          "psnr": 30.23629379272461,
+          "ssim": 0.9048135280609131,
+          "lpips": 0.20271095633506775,
+          "ellipse_time": 0.007835015272482848,
+          "num_GS": 432794,
+          "train_seconds": 270.3694742999942,
+          "completed_updates": 5290,
+          "target_seconds": 270.0
+        }
+      ]
+    }
+  },
+  "cap400k": {
+    "first": {
+      "psnr": 12.900379180908203,
+      "ssim": 0.5098288059234619,
+      "lpips": 0.8111750483512878,
+      "ellipse_time": 0.008329244760366587,
+      "num_GS": 112627
+    },
+    "binding_events": 33,
+    "metrics": {
+      "psnr": 30.706098556518555,
+      "ssim": 0.908434271812439,
+      "lpips": 0.19416122138500214,
+      "ellipse_time": 0.007822770338792067,
+      "num_GS": 399819
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "4fb1d180ae24b2afaaf11dfdf9a8c617d8013a32d64dd954c91ad6dd0cee03bc",
+    "checkpoint_bytes": 94360333,
+    "process_wall_seconds": 396.14463949999845
+  },
+  "cap1000k": {
+    "first": {
+      "psnr": 12.900378227233887,
+      "ssim": 0.5098288655281067,
+      "lpips": 0.8111748695373535,
+      "ellipse_time": 0.008733633237007337,
+      "num_GS": 112627
+    },
+    "binding_events": 0,
+    "metrics": {
+      "psnr": 30.748062133789062,
+      "ssim": 0.9091682434082031,
+      "lpips": 0.19200484454631805,
+      "ellipse_time": 0.00787661625788762,
+      "num_GS": 449350
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "107a659614d131c55aa3fe8bfe6933152a9fa80ebdb53a0640432418abc8867c",
+    "checkpoint_bytes": 106049677,
+    "process_wall_seconds": 412.57177539999975
+  },
+  "no_error": {
+    "first": {
+      "psnr": 12.90037727355957,
+      "ssim": 0.5098288059234619,
+      "lpips": 0.8111749291419983,
+      "ellipse_time": 0.008727532166701097,
+      "num_GS": 112627
+    },
+    "binding_events": 0,
+    "metrics": {
+      "psnr": 30.750356674194336,
+      "ssim": 0.9089539647102356,
+      "lpips": 0.19172550737857819,
+      "ellipse_time": 0.008295982311933469,
+      "num_GS": 453277
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "70cb1adc644a5aed7cb04793a2001cd1f0c81d150f3e40396d0035bc5eacc458",
+    "checkpoint_bytes": 106976333,
+    "process_wall_seconds": 413.85012819999974
+  },
+  "no_edge": {
+    "first": {
+      "psnr": 12.90037727355957,
+      "ssim": 0.5098288059234619,
+      "lpips": 0.8111750483512878,
+      "ellipse_time": 0.008890298696664663,
+      "num_GS": 112627
+    },
+    "binding_events": 0,
+    "metrics": {
+      "psnr": 30.716859817504883,
+      "ssim": 0.9091722369194031,
+      "lpips": 0.1918855607509613,
+      "ellipse_time": 0.008120335065401517,
+      "num_GS": 449470
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "ac453b63bab116e6d1fdfae5969984a613a51d63c41d28f6a7600403a61429f8",
+    "checkpoint_bytes": 106077901,
+    "process_wall_seconds": 393.57878100000016
+  },
+  "signed_high": {
+    "first": {
+      "psnr": 12.900378227233887,
+      "ssim": 0.5098288059234619,
+      "lpips": 0.8111750483512878,
+      "ellipse_time": 0.008160065381954879,
+      "num_GS": 112627
+    },
+    "binding_events": 0,
+    "metrics": {
+      "psnr": 29.668275833129883,
+      "ssim": 0.8894418478012085,
+      "lpips": 0.24039919674396515,
+      "ellipse_time": 0.005190458053197616,
+      "num_GS": 143086
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "4b3152e6be1a1bc207deb3ef69dff7dcde973033a77110102d49d1c9493ecdef",
+    "checkpoint_bytes": 33771277,
+    "process_wall_seconds": 290.270189400002
+  },
+  "abs_low": {
+    "first": {
+      "psnr": 12.90037727355957,
+      "ssim": 0.5098288059234619,
+      "lpips": 0.8111750483512878,
+      "ellipse_time": 0.009283010776226338,
+      "num_GS": 112627
+    },
+    "binding_events": 54,
+    "metrics": {
+      "psnr": 31.084022521972656,
+      "ssim": 0.9170536994934082,
+      "lpips": 0.17235344648361206,
+      "ellipse_time": 0.011520880919236403,
+      "num_GS": 699645
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "a0a0d967ef880587185f0ca8c1fdb2ae58c2ea77a33286875ea4c93c83109aa9",
+    "checkpoint_bytes": 165119181,
+    "process_wall_seconds": 479.75207539999974
+  },
+  "A04": {
+    "first": {
+      "psnr": 12.90038013458252,
+      "ssim": 0.5098289251327515,
+      "lpips": 0.8111749291419983,
+      "ellipse_time": 0.009391020505856246,
+      "num_GS": 112627
+    },
+    "binding_events": 4,
+    "metrics": {
+      "psnr": 30.596670150756836,
+      "ssim": 0.9052484035491943,
+      "lpips": 0.20304736495018005,
+      "ellipse_time": 0.009165287017822266,
+      "num_GS": 603070
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "dc06aa3f87e371b408296701eb1cb83335cfe27078bcdbcfebb50002826bc71e",
+    "checkpoint_bytes": 142327501,
+    "process_wall_seconds": 413.76186499999676
+  },
+  "no_error_400k": {
+    "first": {
+      "psnr": 12.900378227233887,
+      "ssim": 0.5098288059234619,
+      "lpips": 0.8111748695373535,
+      "ellipse_time": 0.008849364060621995,
+      "num_GS": 112627
+    },
+    "binding_events": 33,
+    "metrics": {
+      "psnr": 30.688003540039062,
+      "ssim": 0.9079583883285522,
+      "lpips": 0.1950191855430603,
+      "ellipse_time": 0.007974080550364958,
+      "num_GS": 399817
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "cb10ad8f6fdddefeae339d625cbda3ddd8d830f55c2f8ef9dd12a37d5b9b37f6",
+    "checkpoint_bytes": 94359757,
+    "process_wall_seconds": 429.3658510999994
+  },
+  "no_edge_400k": {
+    "first": {
+      "psnr": 12.900376319885254,
+      "ssim": 0.5098288059234619,
+      "lpips": 0.8111748695373535,
+      "ellipse_time": 0.008670421747060923,
+      "num_GS": 112627
+    },
+    "binding_events": 32,
+    "metrics": {
+      "psnr": 30.7391300201416,
+      "ssim": 0.9083417654037476,
+      "lpips": 0.19464710354804993,
+      "ellipse_time": 0.008006731669108072,
+      "num_GS": 399829
+    },
+    "initial_sha256": "0e743188ffec6e6905b9e5ecaf91882d13acdc121e4144136523742ccd5c73a0",
+    "camera_sha256": "76df47aeac5e6f99fc8e601458a8ab9315d828592fd6fc0dfc2ba8420c39f48a",
+    "final_checkpoint_sha256": "399e3bcac2b28bb85cf93ce63762614307d9ac8d87d368d5f414e467b382ad75",
+    "checkpoint_bytes": 94362765,
+    "process_wall_seconds": 428.5842840999976
+  }
+}

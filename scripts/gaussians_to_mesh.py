@@ -29,9 +29,12 @@ def main():
     p.add_argument('--downsample', type=int, default=4)
     p.add_argument('--voxel', type=float, default=.01, help='Fraction of scene scale')
     p.add_argument('--max-resolution',type=int,default=192)
+    p.add_argument('--truncation', type=float, help='Fixed truncation in normalized scene units')
     a = p.parse_args()
-    if a.views < 2 or a.downsample < 1 or a.voxel <= 0:
+    if a.views < 2 or a.downsample < 1 or not np.isfinite(a.voxel) or a.voxel <= 0:
         p.error('views>=2, downsample>=1, voxel>0 required')
+    if a.truncation is not None and (not np.isfinite(a.truncation) or a.truncation <= 0):
+        p.error('truncation must be positive and finite')
     a.output.mkdir(parents=True, exist_ok=False)
     started = time.perf_counter()
     cfg = Config(data_dir=str(a.data), data_factor=1, result_dir=str(a.output/'loader'),
@@ -53,9 +56,10 @@ def main():
     resolution=min(a.max_resolution,int(np.ceil(length/(a.voxel*runner.scene_scale))))
     if resolution<16: raise ValueError('TSDF resolution must be at least 16')
     voxel=length/resolution
+    truncation = 4*voxel if a.truncation is None else a.truncation
     origin=center-length/2
     volume = o3d.pipelines.integration.UniformTSDFVolume(length=length,resolution=resolution,
-        sdf_trunc=4*voxel,origin=origin,
+        sdf_trunc=truncation,origin=origin,
         color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8)
     ids = np.unique(np.linspace(0,len(runner.trainset)-1,min(a.views,len(runner.trainset))).astype(int))
     records = []
@@ -145,7 +149,7 @@ def main():
         parser_transform=runner.parser.transform.tolist(),scene_scale=float(runner.scene_scale),
         tsdf_backend='uniform',resolution=resolution,box_origin=origin.tolist(),box_length=length,
         crop_policy='Cube around common SfM 1st–99th percentile bounds, enlarged 20%; unbounded exterior excluded',
-        voxel_length=float(voxel),sdf_trunc=float(4*voxel),alpha_threshold=.7,
+        voxel_length=float(voxel),sdf_trunc=float(truncation),alpha_threshold=.7,
         training_views=records,vertices=len(vertices),triangles=len(faces),
         boundary_edges=int((counts==1).sum()),nonmanifold_edges=int((counts>2).sum()),
         components=len(components),bounds=[vertices.min(0).tolist(),vertices.max(0).tolist()],

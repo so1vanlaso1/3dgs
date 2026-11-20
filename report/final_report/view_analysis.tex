@@ -1,0 +1,22 @@
+\subsection{Per-view variation and a Bonsai outlier}
+The same-view comparisons in Table~\ref{table3} use the trainer's floating-point image metrics. For a separate distribution check, all 144 public and three matte final validation panels were decoded from their saved 8-bit RGB images. The target halves were verified byte for byte and against the pair record. The PSNR difference was then recomputed for each view at the saved precision. The direction of the scene means agrees with the main table, but individual gains vary substantially [\hyperlink{evE11}{E11}].
+
+\begin{center}\begin{minipage}{\linewidth}
+\small\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lrrrr@{}}
+\toprule
+Scene & Improved / total & Median (dB) & Full mean (dB) & Without largest gain (dB)\\
+\midrule
+Room & 34 / 39 & $+0.306$ & $+0.740$ & $+0.582$\\
+Counter & 26 / 30 & $+0.152$ & $+0.215$ & $+0.184$\\
+Kitchen & 21 / 35 & $+0.048$ & $+0.293$ & $+0.240$\\
+Bonsai & 20 / 37 & $+0.034$ & $+0.337$ & $-0.023$\\
+Matte & 1 / 3 & $-0.064$ & $+0.017$ & $-0.386$\\
+\bottomrule
+\end{tabular*}\par
+\captionof{table}[Per-view PSNR gains and outlier sensitivity]{Per-view PSNR differences from archived RGB panels. The sensitivity column recomputes the mean after dropping each scene's largest gain. The primary comparison keeps all views.}\label{tab:per-view}
+\end{minipage}\end{center}
+
+In Table~\ref{tab:per-view}, Room has the largest median gain, and Counter also improves on most targets. Gains are less consistent on Kitchen and Bonsai. One Bonsai view changes from 17.48 dB for B00 to 30.79 dB for A05-Abs. In Figure~\ref{fig:bonsai-extremes} the baseline has a broad dark cast, and the candidate reproduces more of the target brightness. Other views include a regression of 2.31 dB. Without the largest gain, the mean of the other 36 Bonsai views is slightly negative. This post hoc check shows that the positive Bonsai mean depends strongly on one view. Its cause and repeatability are unresolved. Similarly, the small matte mean gain masks two regressions among three views.
+
+\reportfigure[Bonsai views with the largest PSNR gain and loss]{0.99\linewidth}{figures/bonsai_rgb_extremes.jpg}
+  {Largest Bonsai PSNR gain and regression in archived final RGB panels. Columns show the same held-out photo and both Gaussian simulations. The selection illustrates extremes of the paired distribution.}{fig:bonsai-extremes}

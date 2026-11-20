@@ -1,0 +1,623 @@
+{
+  "verified": true,
+  "data_input_audit": "room_input_audit.json",
+  "training": {
+    "cfg_sha256": "3b26030dd8fa88ce60fdd0f37b126920feaa13e829662703394d83fc6afb1d7b",
+    "checkpoint_sha256": "3b16161cd762aefff06871665b9441c888505cfa89155dc7dd5d176055dde7eb",
+    "binding_events": 0,
+    "run": "results\\final_report_study_20261119\\replication\\room\\A05_absgrad_s42"
+  },
+  "extract": {
+    "method": "TSDF fusion of expected depth rendered from optimized 3D Gaussians",
+    "checkpoint": "D:\\gsplat\\gsplat\\results\\final_report_study_20261119\\replication\\room\\A05_absgrad_s42\\ckpts\\final_post_update.pt",
+    "checkpoint_sha256": "3b16161cd762aefff06871665b9441c888505cfa89155dc7dd5d176055dde7eb",
+    "gaussian_count": 452409,
+    "data": "D:\\gsplat\\gsplat\\data\\room_factor2",
+    "parser_transform": [
+      [
+        0.002490824011545921,
+        -0.09868999847608685,
+        0.20411038277396826,
+        0.15438857335210177
+      ],
+      [
+        -0.22410284043082476,
+        0.02983865212875466,
+        0.01716217088767709,
+        -0.01487290929781741
+      ],
+      [
+        -0.034331924883148804,
+        -0.20193292797246187,
+        -0.09721820762536554,
+        0.6041793714212931
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "scene_scale": 1.4634144246626821,
+    "tsdf_backend": "uniform",
+    "resolution": 192,
+    "box_origin": [
+      -2.924809037052091,
+      -2.406006950200777,
+      -2.093105469972091
+    ],
+    "box_length": 4.644684640427694,
+    "crop_policy": "Cube around common SfM 1st\u201399th percentile bounds, enlarged 20%; unbounded exterior excluded",
+    "voxel_length": 0.024191065835560906,
+    "sdf_trunc": 0.09676426334224363,
+    "alpha_threshold": 0.7,
+    "training_views": [
+      {
+        "train_index": 0,
+        "image_id": 0,
+        "valid_fraction": 0.98847654117577
+      },
+      {
+        "train_index": 4,
+        "image_id": 4,
+        "valid_fraction": 0.9980546098798027
+      },
+      {
+        "train_index": 8,
+        "image_id": 8,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 12,
+        "image_id": 12,
+        "valid_fraction": 0.9998411926432492
+      },
+      {
+        "train_index": 17,
+        "image_id": 17,
+        "valid_fraction": 0.9999900745402031
+      },
+      {
+        "train_index": 21,
+        "image_id": 21,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 25,
+        "image_id": 25,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 30,
+        "image_id": 30,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 34,
+        "image_id": 34,
+        "valid_fraction": 0.9985211064902582
+      },
+      {
+        "train_index": 38,
+        "image_id": 38,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 43,
+        "image_id": 43,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 47,
+        "image_id": 47,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 51,
+        "image_id": 51,
+        "valid_fraction": 0.9999503727010154
+      },
+      {
+        "train_index": 55,
+        "image_id": 55,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 60,
+        "image_id": 60,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 64,
+        "image_id": 64,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 68,
+        "image_id": 68,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 73,
+        "image_id": 73,
+        "valid_fraction": 0.957201417355659
+      },
+      {
+        "train_index": 77,
+        "image_id": 77,
+        "valid_fraction": 0.9209337872576947
+      },
+      {
+        "train_index": 81,
+        "image_id": 81,
+        "valid_fraction": 0.9394844716181477
+      },
+      {
+        "train_index": 86,
+        "image_id": 86,
+        "valid_fraction": 0.99615884705859
+      },
+      {
+        "train_index": 90,
+        "image_id": 90,
+        "valid_fraction": 0.9999900745402031
+      },
+      {
+        "train_index": 94,
+        "image_id": 94,
+        "valid_fraction": 0.9953548848150391
+      },
+      {
+        "train_index": 98,
+        "image_id": 98,
+        "valid_fraction": 0.9270875723317883
+      },
+      {
+        "train_index": 103,
+        "image_id": 103,
+        "valid_fraction": 0.9661839584718762
+      },
+      {
+        "train_index": 107,
+        "image_id": 107,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 111,
+        "image_id": 111,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 116,
+        "image_id": 116,
+        "valid_fraction": 0.9369931812091196
+      },
+      {
+        "train_index": 120,
+        "image_id": 120,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 124,
+        "image_id": 124,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 129,
+        "image_id": 129,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 133,
+        "image_id": 133,
+        "valid_fraction": 0.9997816398844677
+      },
+      {
+        "train_index": 137,
+        "image_id": 137,
+        "valid_fraction": 0.9998411926432492
+      },
+      {
+        "train_index": 141,
+        "image_id": 141,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 146,
+        "image_id": 146,
+        "valid_fraction": 0.9999305217814215
+      },
+      {
+        "train_index": 150,
+        "image_id": 150,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 154,
+        "image_id": 154,
+        "valid_fraction": 0.9998908199422338
+      },
+      {
+        "train_index": 159,
+        "image_id": 159,
+        "valid_fraction": 0.9999404472412184
+      },
+      {
+        "train_index": 163,
+        "image_id": 163,
+        "valid_fraction": 0.9933300910164663
+      },
+      {
+        "train_index": 167,
+        "image_id": 167,
+        "valid_fraction": 0.9956427231491499
+      },
+      {
+        "train_index": 172,
+        "image_id": 172,
+        "valid_fraction": 0.9949777173427559
+      },
+      {
+        "train_index": 176,
+        "image_id": 176,
+        "valid_fraction": 0.9669184424968487
+      },
+      {
+        "train_index": 180,
+        "image_id": 180,
+        "valid_fraction": 0.9965360145308731
+      },
+      {
+        "train_index": 184,
+        "image_id": 184,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 189,
+        "image_id": 189,
+        "valid_fraction": 0.9822929797222857
+      },
+      {
+        "train_index": 193,
+        "image_id": 193,
+        "valid_fraction": 0.9978561006838642
+      },
+      {
+        "train_index": 197,
+        "image_id": 197,
+        "valid_fraction": 0.9882780319798314
+      },
+      {
+        "train_index": 202,
+        "image_id": 202,
+        "valid_fraction": 0.9900149874442934
+      },
+      {
+        "train_index": 206,
+        "image_id": 206,
+        "valid_fraction": 0.9594941985687487
+      },
+      {
+        "train_index": 210,
+        "image_id": 210,
+        "valid_fraction": 0.9999205963216246
+      },
+      {
+        "train_index": 215,
+        "image_id": 215,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 219,
+        "image_id": 219,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 223,
+        "image_id": 223,
+        "valid_fraction": 0.9998908199422338
+      },
+      {
+        "train_index": 227,
+        "image_id": 227,
+        "valid_fraction": 0.8372423102500224
+      },
+      {
+        "train_index": 232,
+        "image_id": 232,
+        "valid_fraction": 0.9126063264880746
+      },
+      {
+        "train_index": 236,
+        "image_id": 236,
+        "valid_fraction": 0.9799009439112267
+      },
+      {
+        "train_index": 240,
+        "image_id": 240,
+        "valid_fraction": 0.9047056604897222
+      },
+      {
+        "train_index": 245,
+        "image_id": 245,
+        "valid_fraction": 0.961568619666306
+      },
+      {
+        "train_index": 249,
+        "image_id": 249,
+        "valid_fraction": 0.8580559994441742
+      },
+      {
+        "train_index": 253,
+        "image_id": 253,
+        "valid_fraction": 0.9962481761967623
+      },
+      {
+        "train_index": 258,
+        "image_id": 258,
+        "valid_fraction": 0.9996823852864984
+      },
+      {
+        "train_index": 262,
+        "image_id": 262,
+        "valid_fraction": 1.0
+      },
+      {
+        "train_index": 266,
+        "image_id": 266,
+        "valid_fraction": 0.9658861946779684
+      },
+      {
+        "train_index": 271,
+        "image_id": 271,
+        "valid_fraction": 1.0
+      }
+    ],
+    "vertices": 68647,
+    "triangles": 119061,
+    "boundary_edges": 17133,
+    "nonmanifold_edges": 0,
+    "components": 1208,
+    "bounds": [
+      [
+        -2.9127135041343104,
+        -1.1359759938338292,
+        -1.0166030402896307
+      ],
+      [
+        1.63520687295114,
+        1.0896020630377743,
+        1.0638286215686072
+      ]
+    ],
+    "heldout_self_consistency": [
+      {
+        "val_index": 0,
+        "opaque_pixels": 98789,
+        "mesh_coverage_on_opaque": 0.99401755256152,
+        "median_depth_disagreement": 0.008663386106491089,
+        "p95_depth_disagreement": 0.10939193516969681
+      },
+      {
+        "val_index": 9,
+        "opaque_pixels": 100751,
+        "mesh_coverage_on_opaque": 0.9768637532133676,
+        "median_depth_disagreement": 0.009456276893615723,
+        "p95_depth_disagreement": 0.2530740797519684
+      },
+      {
+        "val_index": 19,
+        "opaque_pixels": 100742,
+        "mesh_coverage_on_opaque": 0.9969129062357309,
+        "median_depth_disagreement": 0.00949108600616455,
+        "p95_depth_disagreement": 0.18103426694869995
+      },
+      {
+        "val_index": 28,
+        "opaque_pixels": 100146,
+        "mesh_coverage_on_opaque": 0.9047890080482496,
+        "median_depth_disagreement": 0.023192167282104492,
+        "p95_depth_disagreement": 0.22463491559028625
+      },
+      {
+        "val_index": 38,
+        "opaque_pixels": 97708,
+        "mesh_coverage_on_opaque": 0.9824784050435993,
+        "median_depth_disagreement": 0.009014993906021118,
+        "p95_depth_disagreement": 0.05520614981651306
+      }
+    ],
+    "elapsed_seconds": 10.61327049999818,
+    "mesh_sha256": "9a0618fa997e4518fee80e09c5d53d77386036dbfdcba3e42f08c5ad6353b249",
+    "limitations": "Expected depth can blend surfaces. Training-camera fusion; no geometry ground truth. Raw mesh may have holes/disconnected surfaces. Normalized scene units, not certified metric scale."
+  },
+  "cleanup": {
+    "input": "results/final_report_room_replay_20261119/raw/raw_mesh.ply",
+    "input_sha256": "9a0618fa997e4518fee80e09c5d53d77386036dbfdcba3e42f08c5ad6353b249",
+    "output": "room_cleaned.ply",
+    "output_sha256": "1b66371818532d0f8e1927cab0f8d3b46f3575850be0a096029e1464867c4cb2",
+    "open3d": "0.20.0",
+    "numpy": "2.5.2",
+    "coordinates": "Input axes and normalized scene units; no spatial transform",
+    "definitions": {
+      "components": "edge-connected triangles",
+      "boundary_edges": "one incident face",
+      "nonmanifold_edges": "more than two incident faces"
+    },
+    "parameters": {
+      "sequence": [
+        "remove degenerate and duplicate face triples regardless of winding",
+        "filter disconnected specks",
+        "compact vertices",
+        "quadric decimation",
+        "remove degenerate and duplicate face triples regardless of winding",
+        "compact vertices",
+        "recompute vertex normals",
+        "write binary PLY"
+      ],
+      "duplicate_faces_removed_before_decimation": 0,
+      "duplicate_faces_removed_after_decimation": 20,
+      "speck_rule": "Both strict upper limits must hold",
+      "speck_face_limit": 8,
+      "speck_area_limit": 0.00014630191656511053,
+      "removed_speck_components": 365,
+      "removed_speck_triangles": 612,
+      "removed_speck_area": 0.02090789443984532,
+      "quadric_target_fraction_of_filtered": 0.65,
+      "quadric_target_triangles": 76992,
+      "quadric_boundary_weight": 8.0,
+      "quadric_max_error": "Open3D default (unbounded)"
+    },
+    "seconds": {
+      "filter": 0.41288880000138306,
+      "simplify": 0.6282566000008956,
+      "ply_write": 0.017691900000500027,
+      "total_operations_and_write": 1.0588373000027786
+    },
+    "before": {
+      "vertices": 68647,
+      "triangles": 119061,
+      "components": 1208,
+      "boundary_edges": 17133,
+      "nonmanifold_edges": 0,
+      "surface_area": 23.451653144066725,
+      "bounds": [
+        [
+          -2.9127135041343104,
+          -1.1359759938338292,
+          -1.0166030402896307
+        ],
+        [
+          1.63520687295114,
+          1.0896020630377743,
+          1.0638286215686072
+        ]
+      ]
+    },
+    "after_filter": {
+      "vertices": 67369,
+      "triangles": 118449,
+      "components": 843,
+      "boundary_edges": 15899,
+      "nonmanifold_edges": 0,
+      "surface_area": 23.430745249626842,
+      "bounds": [
+        [
+          -2.9127135041343104,
+          -1.1359759938338292,
+          -1.0166030402896307
+        ],
+        [
+          1.626138455417541,
+          1.0782755659509227,
+          1.0638286215686072
+        ]
+      ]
+    },
+    "after_simplify_reloaded": {
+      "vertices": 45317,
+      "triangles": 76971,
+      "components": 779,
+      "boundary_edges": 13559,
+      "nonmanifold_edges": 0,
+      "surface_area": 23.362242407621913,
+      "bounds": [
+        [
+          -2.9127135041343104,
+          -1.1359759938338292,
+          -1.0166030402896307
+        ],
+        [
+          1.626138455417541,
+          1.0782755659509227,
+          1.0638286215686072
+        ]
+      ]
+    }
+  },
+  "reopen": {
+    "blender": "4.5.4 LTS",
+    "build_hash": "b3efe983cc58",
+    "document": "room_tabletop_edited.blend",
+    "document_sha256": "534b8b6f91d12a21e66b90ffde69337b9d223c27b0a95bb7be59ecc34a42a73d",
+    "check": "Opened in a separate Blender process after the creation process exited",
+    "surface": "Front-left patch of the coffee tabletop, seen in DSCF4667",
+    "vertices_moved": 12,
+    "triangles": 76971,
+    "selection": {
+      "vertex_group": "Coffee table | selected surface",
+      "xy_center": [
+        0.006,
+        0.439
+      ],
+      "inner_radius": 0.027,
+      "outer_radius": 0.056,
+      "height_range": [
+        0.185,
+        0.216
+      ],
+      "minimum_normal_z": 0.55,
+      "connectivity": "Edge connected from nearest XY vertex",
+      "falloff": "Cosine"
+    },
+    "geometry": {
+      "shape_key": "Tabletop lift (+Z)",
+      "saved_value": 1.0,
+      "peak_displacement_xyz": [
+        0,
+        0,
+        0.040000006556510925
+      ],
+      "surface_bounds_before_xyz": [
+        [
+          -0.0344734787940979,
+          0.38806116580963135,
+          0.19295024871826172
+        ],
+        [
+          0.03859652951359749,
+          0.46932846307754517,
+          0.20451757311820984
+        ]
+      ],
+      "mean_vertex_normal_before_xyz": [
+        -0.11874376096596712,
+        0.15516226019180535,
+        0.9807265634435665
+      ]
+    },
+    "coordinates": {
+      "units": "Normalized source scene units",
+      "up": "+Z",
+      "object_scale_xyz": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "object_rotation_euler_deg": [
+        0,
+        0,
+        0
+      ],
+      "object_translation_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "editor_import": "Forward Y / Up Z, scale 1"
+    },
+    "camera_crop_xywh": [
+      36,
+      285,
+      376,
+      245
+    ],
+    "verify_and_capture_seconds": 1.882225000001199
+  },
+  "artifacts": {
+    "raw_ply": "results\\final_report_room_replay_20261119\\raw\\raw_mesh.ply",
+    "raw_obj": "results\\final_report_room_replay_20261119\\raw\\raw_mesh.obj",
+    "blender": "results\\final_report_room_replay_20261119\\design\\room_tabletop_edited.blend"
+  }
+}
