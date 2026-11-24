@@ -140,6 +140,25 @@ def test_split_adds_one_net_gaussian_and_can_underfill():
         assert state[key].shape == (5,)
 
 
+def test_uncapped_long_axis_growth_splits_every_eligible_parent():
+    strategy = BudgetStrategy(cap_max=None, split_mode="long_axis")
+    params, optimizers = make_params(4)
+    sum(p.sum() for p in params.values()).backward()
+    for optimizer in optimizers.values():
+        optimizer.step()
+        optimizer.zero_grad()
+    params["opacities"].data[-1] = -10
+    state = strategy.initialize_state()
+    strategy._ensure_state(params, state)
+    state.update(grad2d=torch.tensor([1., 2., 0., 3.]), count=torch.ones(4))
+    assert strategy._grow_gs(params, optimizers, state, 600) == (0, 2)
+    assert strategy._prune_gs(params, optimizers, state, 600) == 1
+    event = state["growth_history"][0]
+    assert event["target"] is None
+    assert event["eligible"] == event["added"] == 2
+    assert event["after"] == 5
+
+
 @pytest.mark.parametrize("rank,extra_parent", [("gradient", 1), ("residual", 2)])
 def test_fallback_uses_vacant_slots_after_ordinary_growth(rank, extra_parent):
     strategy = BudgetStrategy(

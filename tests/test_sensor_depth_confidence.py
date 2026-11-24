@@ -5,6 +5,51 @@ import numpy as np
 import pytest
 import torch
 from gsplat.losses import confidence_depth_l1_loss, depth_l1_loss, sensor_coverage_loss
+from gsplat.robust_sensor_depth import protected_sensor_depth
+
+
+@pytest.mark.parametrize("residual_scale", [0., .025])
+def test_g4_invalid_predictions_have_zero_gradient_and_keep_sensor_denominator(residual_scale):
+    pred = torch.tensor([1.3151e-5, float("nan"), float("inf"), -.2, 1., 2.], requires_grad=True)
+    gt = torch.tensor([1.83, 2., 3., 2., 2., 0.])
+    w = torch.tensor([.1, .1, .1, .1, .6, float("nan")])
+    loss, evidence, active, _ = protected_sensor_depth(
+        pred, gt, w, units_per_meter=1., scene_scale=2., min_depth_m=.3,
+        residual_scale_inv_m=residual_scale)
+    assert evidence.sum() == 5 and active.sum() == 1
+    r = .5 if not residual_scale else residual_scale * np.log1p(.5 / residual_scale)
+    assert loss.item() == pytest.approx(1.2 * r)
+    loss.backward()
+    assert torch.isfinite(pred.grad).all() and pred.grad[~active].eq(0).all()
+    assert pred.grad[4].item() == pytest.approx(-1.2 / (1 + .5 / residual_scale) if residual_scale else -1.2)
+
+
+@pytest.mark.parametrize("residual_scale", [0., .025])
+def test_g4_unit_conversion_and_empty_frame(residual_scale):
+    for p in (torch.tensor([.29, .30, 2.]), torch.empty(0)):
+        def measure(units):
+            z = (p * units).requires_grad_()
+            loss, _, active, _ = protected_sensor_depth(
+                z, torch.ones_like(p)*units, torch.ones_like(p), units_per_meter=units,
+                scene_scale=units, min_depth_m=.3, residual_scale_inv_m=residual_scale)
+            loss.backward()
+            assert torch.isfinite(z.grad).all() and torch.isfinite(loss)
+            return loss, active
+        a, b = measure(1.), measure(2.)
+        torch.testing.assert_close(a, b)
+        assert a[1].tolist() == ([False, True, True] if len(p) else [])
+
+
+def test_g4_c_agrees_with_legacy_when_all_predictions_are_supported():
+    z = torch.tensor([.31, 1.83, 2.1], requires_grad=True)
+    target = torch.tensor([.42, 1.83, 2.])
+    confidence = torch.tensor([.14, .3, .2])
+    legacy = confidence_depth_l1_loss(z, target, confidence, scene_scale=2.08)
+    guarded, _, active, _ = protected_sensor_depth(
+        z, target, confidence, scene_scale=2.08, units_per_meter=.988, min_depth_m=.30)
+    assert active.all()
+    torch.testing.assert_close(legacy, guarded)
+    torch.testing.assert_close(torch.autograd.grad(legacy, z), torch.autograd.grad(guarded, z))
 
 
 def test_weights_normalize_and_preserve_legacy_all_ones():

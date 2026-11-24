@@ -75,6 +75,7 @@ except ModuleNotFoundError as e:
 from gsplat.cuda._wrapper import CameraModel
 from gsplat.strategy import BudgetStrategy, DefaultStrategy, MCMCStrategy
 from gsplat.surface import surface_depth_loss
+from gsplat.robust_sensor_depth import protected_sensor_depth
 from gsplat_viewer import GsplatViewer, GsplatRenderTabState
 from nerfview import CameraState, RenderTabState, apply_float_colormap
 
@@ -269,6 +270,10 @@ class Config:
     depth_lambda: float = 1e-2
     # Weight sensor observations by their per-sample evidence confidence.
     depth_confidence: bool = False
+    # Minimum supported predicted Z in meters for a calibrated metric dataset.
+    sensor_min_pred_depth_m: float = 0.0
+    # Optional log1p penalty scale in inverse meters on supported predictions.
+    sensor_residual_scale_inv_m: float = 0.0
     # Optional opacity prior at supported sensor-depth observations only.
     sensor_alpha_lambda: float = 0.0
     # Experimental edge-aware curvature prior on expected rendered log-depth.
@@ -441,6 +446,13 @@ class Runner:
             raise ValueError("sensor_depth_dir requires depth_loss and the colmap backend")
         if cfg.depth_confidence and not cfg.sensor_depth_dir:
             raise ValueError("depth_confidence requires sensor_depth_dir")
+        if not (math.isfinite(cfg.sensor_min_pred_depth_m) and cfg.sensor_min_pred_depth_m >= 0
+                and math.isfinite(cfg.sensor_residual_scale_inv_m) and cfg.sensor_residual_scale_inv_m >= 0):
+            raise ValueError("Sensor depth limits must be finite and nonnegative")
+        if cfg.sensor_min_pred_depth_m and not cfg.depth_confidence:
+            raise ValueError("The predicted depth limit requires calibrated sensor confidence")
+        if cfg.sensor_residual_scale_inv_m and not cfg.sensor_min_pred_depth_m:
+            raise ValueError("The robust residual requires a positive predicted depth limit")
         if cfg.sensor_alpha_lambda < 0 or (cfg.sensor_alpha_lambda and not cfg.depth_confidence):
             raise ValueError("sensor_alpha_lambda must be nonnegative and requires depth_confidence")
         if cfg.data_type == "ncore":
@@ -1066,7 +1078,20 @@ class Runner:
                     depths.permute(0, 3, 1, 2), grid, align_corners=True
                 ).squeeze(3).squeeze(1) if points.shape[1] else depths.sum().reshape(1, 1)[:, :0]
                 # calculate loss in disparity space
-                if cfg.depth_confidence:
+                if cfg.sensor_min_pred_depth_m:
+                    depthloss, evidence, active, terms = protected_sensor_depth(
+                        sampled_depths, depths_gt, data["depth_confidence"].to(device),
+                        units_per_meter=float(np.linalg.norm(self.parser.transform[:3, 0])),
+                        scene_scale=self.scene_scale, min_depth_m=cfg.sensor_min_pred_depth_m,
+                        residual_scale_inv_m=cfg.sensor_residual_scale_inv_m)
+                    if world_rank == 0 and cfg.tb_every > 0:
+                        self.writer.add_scalar("sensor/evidence_samples", evidence.sum().item(), step)
+                        self.writer.add_scalar("sensor/active_samples", active.sum().item(), step)
+                        self.writer.add_scalar("sensor/depth_loss", depthloss.item(), step)
+                        if terms.numel():
+                            share = terms.detach().max() / terms.detach().sum().clamp_min(1e-20)
+                            self.writer.add_scalar("sensor/largest_loss_share", share.item(), step)
+                elif cfg.depth_confidence:
                     depthloss = confidence_depth_l1_loss(
                         sampled_depths, depths_gt, data["depth_confidence"].to(device),
                         scene_scale=self.scene_scale)

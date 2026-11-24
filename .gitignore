@@ -14,6 +14,7 @@ __pycache__/
 
 # C extensions
 *.so
+*.pyd
 
 # Distribution / packaging
 .Python
@@ -140,6 +141,15 @@ compile_commands.json
 /data/
 /results/
 /stage_result/*/data/
+
+# Local capture archives kept at the repository root. Keep curated archives
+# and fixtures elsewhere eligible for version control.
+/710d9d02a3.zip
+/mo.zip
+/newscan.zip
+
+# Local report template.
+/Mau bao cao mon TNVL 1.docx
 
 # LaTeX intermediates. Keep source and explicitly exported report PDFs.
 /report/**/*.aux

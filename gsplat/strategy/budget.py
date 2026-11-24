@@ -27,9 +27,10 @@ class BudgetStrategy(DefaultStrategy):
     projections and images from the same render. DefaultStrategy's callbacks
     retain their existing semantics. The cap bounds live Gaussian count;
     structural updates still temporarily allocate old and replacement tensors.
+    Set the cap to None to grow every eligible parent.
     """
 
-    cap_max: int = 700_000
+    cap_max: int | None = 700_000
     score_every: int = 10
     top_contributors: int = 4
     gradient_weight: float = 1.0
@@ -59,7 +60,7 @@ class BudgetStrategy(DefaultStrategy):
             raise ValueError("Require 0 < split_distance <= 0.5 and 0 < opacity_reduction < 1")
         if self.split_mode == "long_axis" and self.revised_opacity:
             raise ValueError("Long-Axis Split uses its own opacity reduction")
-        if self.cap_max < 1 or self.score_every < 1:
+        if (self.cap_max is not None and self.cap_max < 1) or self.score_every < 1:
             raise ValueError("cap_max and score_every must be positive")
         if not 1 <= self.top_contributors <= 8:
             raise ValueError("top_contributors must be between 1 and 8")
@@ -83,7 +84,7 @@ class BudgetStrategy(DefaultStrategy):
     def _ensure_state(self, params, state):
         if state["initial_count"] is None:
             n = len(params["means"])
-            if n > self.cap_max:
+            if self.cap_max is not None and n > self.cap_max:
                 raise ValueError(
                     f"Initial count {n} exceeds Gaussian budget {self.cap_max}"
                 )
@@ -135,7 +136,8 @@ class BudgetStrategy(DefaultStrategy):
             and step > self.fallback_start_iter - self.refine_every
         )
         if (
-            step < self.refine_start_iter
+            (self.cap_max is None and not track_fallback)
+            or step < self.refine_start_iter
             or step >= self.refine_stop_iter
             or step % self.score_every
             or (self.error_weight == 0 and self.edge_weight == 0 and not track_fallback)
@@ -191,7 +193,9 @@ class BudgetStrategy(DefaultStrategy):
         ).nonzero().flatten()
         return candidates, residual
 
-    def target_count(self, initial_count: int, step: int) -> int:
+    def target_count(self, initial_count: int, step: int) -> int | None:
+        if self.cap_max is None:
+            return None
         # Match DefaultStrategy's strict start/stop and reset-pause conditions.
         events = [
             s
@@ -238,9 +242,13 @@ class BudgetStrategy(DefaultStrategy):
         opaque = params["opacities"].sigmoid().flatten() >= self.prune_opa
         eligible &= opaque
         candidates = eligible.nonzero().flatten()
-        additions = min(max(0, target - n), candidates.numel())
-        chosen = torch.zeros(n, dtype=torch.bool, device=grads.device)
-        if additions:
+        if target is None:
+            additions = candidates.numel()
+            chosen = eligible
+        else:
+            additions = min(max(0, target - n), candidates.numel())
+            chosen = torch.zeros_like(eligible)
+        if target is not None and additions:
             score = self.gradient_weight * self._normalize(grads, eligible)
             observations = state["score_count"]
             support = (observations / 3).clamp_max(1).sqrt()
@@ -265,7 +273,8 @@ class BudgetStrategy(DefaultStrategy):
         fallback_stats = {}
         if self.fallback_rank != "off" and step >= self.fallback_start_iter:
             fallback, residual = self._fallback_candidates(state, grads, eligible, opaque)
-            extra = min(self.fallback_max, max(0, target - n - additions), len(fallback))
+            available = len(fallback) if target is None else max(0, target - n - additions)
+            extra = min(self.fallback_max, available, len(fallback))
             if extra:
                 score = residual if self.fallback_rank == "residual" else grads
                 chosen[fallback[score[fallback].topk(extra, sorted=False).indices]] = True
