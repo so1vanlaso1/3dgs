@@ -247,11 +247,16 @@ def main():
     parser.add_argument("--cache", type=Path, default=Path("results/dl3dv_source"))
     parser.add_argument("--source-root", type=Path, help="Use local <scene>/nerfstudio source folders")
     parser.add_argument("--steps", type=int, default=48000)
+    parser.add_argument("--refine-stop-iter", type=int,
+                        help="Stop splitting and pruning at this update (default: train to the end)")
     parser.add_argument("--growth-headroom-mib", type=int, default=0)
     parser.add_argument("--prepare-only", action="store_true")
     args = parser.parse_args()
     if args.steps < 2 or args.growth_headroom_mib < 0:
         parser.error("Require at least two steps and nonnegative growth headroom")
+    if args.refine_stop_iter is not None and args.refine_stop_iter < 1:
+        parser.error("--refine-stop-iter must be positive")
+    refine_stop_iter = args.steps if args.refine_stop_iter is None else args.refine_stop_iter
     torch.set_num_threads(min(4, torch.get_num_threads()))
     cv2.setNumThreads(4)
     with urlopen(SPLIT_URL, timeout=60) as source:
@@ -271,15 +276,21 @@ def main():
     config = args.output / "run.json"
     settings = {"splits": SPLIT_URL, "scenes": scenes, "steps": args.steps,
                 "growth_headroom_mib": args.growth_headroom_mib,
+                "refine_stop_iter": refine_stop_iter,
                 "source_root": str(args.source_root.resolve()) if args.source_root else None,
                 "dataset_revision": DATASET_REVISION}
-    if config.exists() and json.loads(config.read_text()) != settings:
-        parser.error("Existing output uses different scene or training settings")
+    if config.exists():
+        previous = json.loads(config.read_text())
+        previous.setdefault("refine_stop_iter", 16000)
+        if previous != settings:
+            parser.error("Existing output uses different scene or training settings; choose a fresh output")
     painter.save_json(config, settings)
     log = args.output / "experiment_log.md"
     if not log.exists():
         log.write_text("# A05-Abs on DL3DV\n\n"
-                       "Published 64-input split. Sparse initialization from input RGB only.\n\n",
+                       "Published 64-input split. Sparse initialization from input RGB only.\n"
+                       f"Training updates: {args.steps:,}. Scheduled refinement end: "
+                       f"{min(refine_stop_iter, args.steps):,}.\n\n",
                        encoding="utf-8")
     summaries = []
     for scene in scenes:
@@ -304,7 +315,7 @@ def main():
         if not (model / "training.json").exists():
             train(prepared, model, count, args.steps, quality=True, posed_rgb=True,
                   resume=(model / "latest_resume.pt").exists(),
-                  growth_headroom_mib=args.growth_headroom_mib)
+                  growth_headroom_mib=args.growth_headroom_mib, refine_stop_iter=refine_stop_iter)
         summary = evaluate(output, args.steps, metric.cuda())
         metric.cpu()
         summaries.append(summary)

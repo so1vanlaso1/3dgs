@@ -65,9 +65,12 @@ def load_posed(run):
 
 
 def train(run, out, count, steps=CHECKPOINTS[-1], *, quality=False, resume=False,
-          finish_refinement=False, growth_headroom_mib=768, rgb_long_edge=None, posed_rgb=False):
+          finish_refinement=False, growth_headroom_mib=768, rgb_long_edge=None, posed_rgb=False,
+          refine_stop_iter=None):
+    if refine_stop_iter is None:
+        refine_stop_iter = 16000 if quality else 6000
     strategy = BudgetStrategy(
-        cap_max=None, absgrad=True, grow_grad2d=.0008, refine_stop_iter=16000 if quality else 6000,
+        cap_max=None, absgrad=True, grow_grad2d=.0008, refine_stop_iter=refine_stop_iter,
         reset_every=6000 if quality else 3000,
         edge_weight=.25, split_mode="long_axis", clone_policy="split",
     )
@@ -97,6 +100,7 @@ def train(run, out, count, steps=CHECKPOINTS[-1], *, quality=False, resume=False
         if (previous["steps"] != steps or previous["initial_gaussians"] != count or not previous["quality_mode"]
                 or tuple(previous["rgb_size"]) != size
                 or previous.get("posed_rgb", False) != posed_rgb
+                or previous["strategy"]["refine_stop_iter"] != refine_stop_iter
                 or previous.get("growth_headroom_mib", 768) != growth_headroom_mib
                 or previous["source_sha256"][str(Path(__file__))] != painter.sha(Path(__file__))):
             raise ValueError("Resume settings or source differ from the quality run protocol")
