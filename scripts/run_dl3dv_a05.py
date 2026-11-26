@@ -153,7 +153,30 @@ def triangulate(rgb, views, ks, fit):
                 quats=quats, scales=np.repeat(scale[:, None], 3, axis=1).astype(np.float32))
 
 
-def prepare(scene, split, cache, source_root, output):
+def resize_seeds(seeds, count):
+    original = len(seeds["points"])
+    rng = np.random.default_rng(43)
+    if count < original:
+        indices = rng.choice(original, count, replace=False)
+        return {key: values[indices] for key, values in seeds.items()}
+    if count == original:
+        return seeds
+
+    # Keep each triangulated point and distribute additional splats evenly among them.
+    copies, remainder = divmod(count, original)
+    indices = np.concatenate((np.tile(np.arange(original), copies),
+                              rng.choice(original, remainder, replace=False)))
+    expanded = {key: values[indices] for key, values in seeds.items()}
+    offsets = rng.standard_normal((count - original, 3), dtype=np.float32)
+    np.clip(offsets, -2., 2., out=offsets)
+    offsets *= expanded["scales"][original:]
+    expanded["points"][original:] += .25 * offsets
+    copies_per_seed = np.bincount(indices, minlength=original).astype(np.float32)
+    expanded["scales"] /= np.sqrt(copies_per_seed[indices, None])
+    return expanded
+
+
+def prepare(scene, split, cache, source_root, output, initial_gaussians):
     folder = (source_root / scene / "nerfstudio" if source_root else
               download(cache, scene, ["transforms.json"]))
     metadata = json.loads((folder / "transforms.json").read_text())
@@ -189,6 +212,14 @@ def prepare(scene, split, cache, source_root, output):
         ks = np.repeat(intrinsics[None], len(frame_ids), axis=0)
         seeds = triangulate(rgb, views, ks, fit)
         del rgb
+        triangulated_count = len(seeds["points"])
+        initialization = "SIFT triangulation from only the 64 input RGB images"
+        if initial_gaussians is not None:
+            seeds = resize_seeds(seeds, initial_gaussians)
+            if initial_gaussians > triangulated_count:
+                initialization += ", expanded with jittered copies and reduced scales"
+            elif initial_gaussians < triangulated_count:
+                initialization += ", randomly subsampled"
         np.savez(prepared / "cameras.npz", fit=fit, heldout=heldout, views=views.astype(np.float32),
                  ks=ks, positions_m=c2w[:, :3, 3].astype(np.float32))
         np.savez_compressed(prepared / "seeds.npz", **seeds)
@@ -197,7 +228,7 @@ def prepare(scene, split, cache, source_root, output):
             "split_url": SPLIT_URL, "dataset": DATASET, "dataset_revision": DATASET_REVISION,
             "source_mode": "local override" if source_root else "pinned Hugging Face dataset",
             "rgb_size": SIZE, "seed_count": len(seeds["points"]), "source_camera_radius": radius,
-            "initialization": "SIFT triangulation from only the 64 input RGB images",
+            "triangulated_seed_count": triangulated_count, "initialization": initialization,
             "source_transforms_sha256": painter.sha(folder / "transforms.json"),
         })
         prepared.rename(output)
@@ -264,6 +295,8 @@ def main():
     parser.add_argument("--cache", type=Path, default=Path("results/dl3dv_source"))
     parser.add_argument("--source-root", type=Path, help="Use local <scene>/nerfstudio source folders")
     parser.add_argument("--steps", type=int, default=48000)
+    parser.add_argument("--initial-gaussians", type=int,
+                        help="Start with this many splats using only the triangulated seed cloud")
     parser.add_argument("--refine-stop-iter", type=int,
                         help="Stop splitting and pruning at this update (default: train to the end)")
     parser.add_argument("--growth-headroom-mib", type=int, default=0)
@@ -273,6 +306,8 @@ def main():
         parser.error("Require at least two steps and nonnegative growth headroom")
     if args.refine_stop_iter is not None and args.refine_stop_iter < 1:
         parser.error("--refine-stop-iter must be positive")
+    if args.initial_gaussians is not None and args.initial_gaussians < 100:
+        parser.error("--initial-gaussians must be at least 100")
     refine_stop_iter = args.steps if args.refine_stop_iter is None else args.refine_stop_iter
     torch.set_num_threads(min(4, torch.get_num_threads()))
     cv2.setNumThreads(4)
@@ -296,6 +331,8 @@ def main():
                 "refine_stop_iter": refine_stop_iter,
                 "source_root": str(args.source_root.resolve()) if args.source_root else None,
                 "dataset_revision": DATASET_REVISION}
+    if args.initial_gaussians is not None:
+        settings["initial_gaussians"] = args.initial_gaussians
     if config.exists():
         previous = json.loads(config.read_text())
         previous.setdefault("refine_stop_iter", 16000)
@@ -304,10 +341,12 @@ def main():
     painter.save_json(config, settings)
     log = args.output / "experiment_log.md"
     if not log.exists():
+        count_note = (f"Requested starting Gaussians: {args.initial_gaussians:,}.\n"
+                      if args.initial_gaussians is not None else "")
         log.write_text("# A05-Abs on DL3DV\n\n"
-                       "Published 64-input split. Sparse initialization from input RGB only.\n"
+                       "Published 64-input split. Initialization from input RGB only.\n"
                        f"Training updates: {args.steps:,}. Scheduled refinement end: "
-                       f"{min(refine_stop_iter, args.steps):,}.\n\n",
+                       f"{min(refine_stop_iter, args.steps):,}.\n" + count_note + "\n",
                        encoding="utf-8")
     completed = {}
     if not args.prepare_only:
@@ -331,10 +370,19 @@ def main():
         prepared = output / "prepared"
         if not prepared.exists():
             print(f"{scene}: preparing benchmark cameras and input-only seed points", flush=True)
-            prepare(scene, splits[scene], args.cache, args.source_root, prepared)
-        count = json.loads((prepared / "inputs.json").read_text())["seed_count"]
+            prepare(scene, splits[scene], args.cache, args.source_root, prepared,
+                    args.initial_gaussians)
+        inputs = json.loads((prepared / "inputs.json").read_text())
+        count = inputs["seed_count"]
+        if args.initial_gaussians is not None and count != args.initial_gaussians:
+            raise ValueError(f"{scene}: prepared seed count {count:,} differs from requested "
+                             f"{args.initial_gaussians:,}")
+        if args.initial_gaussians is not None:
+            print(f"{scene}: {count:,} initial Gaussians from "
+                  f"{inputs['triangulated_seed_count']:,} triangulated seeds", flush=True)
         if args.prepare_only:
-            print(f"{scene}: prepared {count:,} initial Gaussians", flush=True)
+            if args.initial_gaussians is None:
+                print(f"{scene}: prepared {count:,} initial Gaussians", flush=True)
             continue
         if metric is None:
             metric = LPIPS(net="vgg", version="0.1").eval()

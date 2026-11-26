@@ -3180,3 +3180,9 @@ Verified the default 48,000-step and explicit 16,000-step settings, and complete
 Added [the full-benchmark launcher](../scripts/run_dl3dv_140.sh) for 48,000 updates with refinement through 16k on every scene. The user-supplied first-scene A/B favored that window by 1.4524 dB. The launcher uses the published 64-input and fixed target IDs. Each completed scene contributes equally to the aggregate, which is saved after each completion and reports the requested and evaluated counts. Re-running the launcher with the same output reuses completed results.
 
 Verified the launcher selected all 140 official scene IDs and recovered the expected equal-weight mean from 140 synthetic cached summaries. A separate two-update CUDA smoke fit scored 40 synthetic held-out views and updated the aggregate from zero to one completed scene. The official full benchmark remains unrun.
+
+#### DL3DV single-scene starting Gaussian count
+
+Added `--initial-gaussians` to the DL3DV runner for controlled initialization experiments. A requested count above the triangulated seed count uses deterministic, jittered copies with smaller scales. It uses the same 64 input images and adds no triangulated observations. The regular initialization remains the default. For the first-scene comparison, use a fresh output with `--initial-gaussians 5000000 --steps 48000 --refine-stop-iter 16000` and compare with the existing 26.1204 dB result.
+
+Verified that the synthetic scene prepared and saved exactly 5,000,000 finite seeds with positive scales from 63,266 triangulated points. A separate CUDA smoke test started at 100,000 Gaussians, finished two updates, scored 40 synthetic held-out views, and exported the PLY. The 5-million CUDA fit and its quality impact on real DL3DV data remain unmeasured.
