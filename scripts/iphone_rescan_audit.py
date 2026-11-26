@@ -34,10 +34,13 @@ def select_frames(video, expression, target, width, height, *, native=False):
         filters += f",scale={width}:{height}:flags=area"
     filter_file = target.with_suffix(".filter")
     filter_file.write_text(filters, encoding="ascii")
+    # The frozen newscan filter fits in a command-line argument, including on
+    # FFmpeg builds that predate the slash syntax for loading files.
+    filter_args = ["-vf", filters] if len(filters) <= 8192 else ["-/filter:v", str(filter_file)]
     subprocess.run([
         "ffmpeg", "-v", "error", "-y", "-threads", "6", "-ignore_editlist", "1",
         "-noautorotate", "-i", str(video), "-map", "0:v:0", "-nostdin",
-        "-/filter:v", str(filter_file), "-filter_threads", "3", "-fps_mode", "passthrough",
+        *filter_args, "-filter_threads", "3", "-fps_mode", "passthrough",
         "-f", "rawvideo", "-pix_fmt", "rgb24", str(target),
     ], check=True)
 

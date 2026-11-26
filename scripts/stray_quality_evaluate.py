@@ -79,24 +79,54 @@ def score_surfaces(output, renders, arm, selected, images, references, regions):
     painter.save_rows(output.with_suffix(".csv"), rows)
 
 
+def newscan_evaluation(run, source, split, mesh, size, checkpoints):
+    regions = json.loads((run / "splits/evaluation_regions.json").read_text())
+    heldout = split["heldout"].tolist()
+    final = heldout[::3]
+    height = size[1]
+    posters = []
+    for frame in final:
+        if str(frame) in regions["poster_native_xyxy"]:
+            left, top, right, bottom = regions["poster_native_xyxy"][str(frame)]
+            posters.append({"frame": frame, "surface": "poster",
+                            "box": [height - bottom, left, height - top, right]})
+    evaluation = {
+        "development": [frame for frame in heldout if frame not in final],
+        "final": final,
+        "candidate_updates": [step for step in checkpoints if step >= 20_000] or checkpoints[-1:],
+        "final_regions_upright_xyxy": posters,
+    }
+    refs = painter.references(
+        painter.mesh_scene(mesh), split, [{"frame": frame} for frame in heldout], source,
+        regions={int(frame): boxes for frame, boxes in regions["materials_depth_xyxy"].items()},
+        expected_pixels=2_874_584,
+    )
+    return evaluation, refs
+
+
 @torch.inference_mode()
 def score(run, source, out, reuse_development=False):
     previous = json.loads((out / "summary.json").read_text()) if reuse_development else None
     verified = previous["readback"] if previous else readback(out)
     protocol = json.loads((out / "protocol.json").read_text())
-    evaluation = json.loads((run / "splits/evaluation_protocol.json").read_text())
-    size, images, split, _ = load_scan(run, load_mesh=False)
+    evaluation_path = run / "splits/evaluation_protocol.json"
+    has_protocol = evaluation_path.is_file()
+    size, images, split, mesh = load_scan(run, load_mesh=not has_protocol)
     view, k, depth_k = painter.camera_arrays(split, size)
     arm = protocol["arm"]
+    if has_protocol:
+        evaluation = json.loads(evaluation_path.read_text())
+        refs = {}
+        with np.load(run / "geometry/heldout_mesh_depth.npz") as file:
+            assert np.array_equal(file["frames"], split["heldout"])
+            for frame, mesh_z in zip(file["frames"], file["depth_m"]):
+                depth, confidence = rgb_depth(source, int(frame))
+                eligible = (confidence == 2) & (depth >= 250) & (depth <= 5000)
+                refs[int(frame)] = depth.astype(np.float32) * .001, eligible, mesh_z, np.zeros_like(eligible)
+    else:
+        evaluation, refs = newscan_evaluation(run, source, split, mesh, size, protocol["checkpoints"])
     development, final = evaluation["development"], evaluation["final"]
     assert sorted(development + final) == split["heldout"].tolist() and not set(development) & set(final)
-    refs = {}
-    with np.load(run / "geometry/heldout_mesh_depth.npz") as file:
-        assert np.array_equal(file["frames"], split["heldout"])
-        for frame, mesh_z in zip(file["frames"], file["depth_m"]):
-            depth, confidence = rgb_depth(source, int(frame))
-            eligible = (confidence == 2) & (depth >= 250) & (depth <= 5000)
-            refs[int(frame)] = depth.astype(np.float32) * .001, eligible, mesh_z, np.zeros_like(eligible)
     lpips = LearnedPerceptualImagePatchSimilarity(net_type="alex", normalize=True).cuda().eval()
 
     def evaluate(step, frames, name):
