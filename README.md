@@ -1,5 +1,19 @@
 # gsplat
 
+## NVIDIA Test-Time Baking
+
+On the `TTB` branch, use Python 3.10–3.12 and Git on a machine with a working NVIDIA driver. From the clone root, run:
+
+```bash
+python scripts/run_ttb.py /path/to/rgb.mp4
+```
+
+Use `python3` if that is your Python command. You can also pass `newscan.zip` directly. With no argument, the launcher checks the clone root and its parent for `newscan.zip`.
+
+The launcher creates an isolated environment with prebuilt PyTorch CUDA wheels, downloads the full `DVSM-TTB-p8-DL3DV-960p` and Pi3 checkpoints, samples the video, estimates camera poses, and bakes the scene. The run writes `scene.recon.pt`, `experiment_log.md`, and `run.log` under `results/ttb/`. The artifact holds the fast weights for novel-view rendering and is used with the downloaded full checkpoint. [NVIDIA DVSM](https://github.com/NVlabs/DVSM#inference)
+
+The default is 32 frames at a 960-pixel long edge when at least 20 GiB of GPU memory is free. It uses smaller settings with less free memory. Override frame count and resolution with `--views`, `--long-edge`, and `--pose-size`. The first launch downloads several gigabytes. Subsequent launches reuse the environment and checkpoints.
+
 [![Core Tests.](https://github.com/nerfstudio-project/gsplat/actions/workflows/core_tests.yml/badge.svg?branch=main)](https://github.com/nerfstudio-project/gsplat/actions/workflows/core_tests.yml)
 [![Docs](https://github.com/nerfstudio-project/gsplat/actions/workflows/doc.yml/badge.svg?branch=main)](https://github.com/nerfstudio-project/gsplat/actions/workflows/doc.yml)
 
