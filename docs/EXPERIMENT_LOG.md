@@ -3174,3 +3174,9 @@ A CUDA smoke test used a synthetic posed scene with the first official scene's 6
 The DL3DV runner now schedules A05-Abs splitting and pruning through the final update by default. The Gaussian count has no fixed cap. The existing optional CUDA headroom guard can still end refinement early. Use `--refine-stop-iter 16000` to reproduce the original window. The configured cutoff is recorded and checked when reusing or resuming an output. The original schedule reserves later updates for fitting a fixed set of splats and bounds how long splitting, pruning, and opacity resets remain active.
 
 Verified the default 48,000-step and explicit 16,000-step settings, and completed a two-update CUDA run with 40 scored synthetic targets and verified PLY export. In a separate matched 750-update synthetic fit, the full schedule recorded growth events at steps 600 and 700, while the arm stopping at 600 recorded none. No full DL3DV quality result has been measured under the changed schedule.
+
+#### DL3DV-140 batch using the 16k refinement window
+
+Added [the full-benchmark launcher](../scripts/run_dl3dv_140.sh) for 48,000 updates with refinement through 16k on every scene. The user-supplied first-scene A/B favored that window by 1.4524 dB. The launcher uses the published 64-input and fixed target IDs. Each completed scene contributes equally to the aggregate, which is saved after each completion and reports the requested and evaluated counts. Re-running the launcher with the same output reuses completed results.
+
+Verified the launcher selected all 140 official scene IDs and recovered the expected equal-weight mean from 140 synthetic cached summaries. A separate two-update CUDA smoke fit scored 40 synthetic held-out views and updated the aggregate from zero to one completed scene. The official full benchmark remains unrun.

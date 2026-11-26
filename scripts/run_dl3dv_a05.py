@@ -25,6 +25,7 @@ SPLIT_URL = (f"https://raw.githubusercontent.com/NVlabs/DVSM/{DVSM_REVISION}/"
 DATASET = "DL3DV/DL3DV-Benchmark"
 DATASET_REVISION = "9684e8382278c5e18173c1e72bd246daf2874539"
 SIZE = (960, 544)
+METRICS = ("psnr_db", "ssim", "lpips_vgg")
 
 
 def download(cache, scene, files):
@@ -230,12 +231,28 @@ def evaluate(scene_output, steps, metric):
         })
     del saved, state
     painter.save_rows(scene_output / "heldout.csv", rows)
-    summary = {key: float(np.mean([row[key] for row in rows]))
-               for key in ("psnr_db", "ssim", "lpips_vgg")}
+    summary = {key: float(np.mean([row[key] for row in rows])) for key in METRICS}
     summary.update(scene=inputs["scene"], heldout_views=len(rows), steps=steps,
                    export=export_checkpoint(checkpoint, scene_output / "scene.ply"))
-    painter.save_json(scene_output / "summary.json", summary)
+    temporary = scene_output / "summary.json.tmp"
+    painter.save_json(temporary, summary)
+    temporary.replace(scene_output / "summary.json")
     return summary
+
+
+def write_progress(output, scenes, completed):
+    ordered = [completed[scene] for scene in scenes if scene in completed]
+    mean = {key: float(np.mean([result[key] for result in ordered])) for key in METRICS} if ordered else None
+    temporary = output / "summary.json.tmp"
+    painter.save_json(temporary, {
+        "scenes_requested": len(scenes),
+        "scenes_evaluated": len(ordered),
+        "complete": len(ordered) == len(scenes),
+        "macro_average": mean,
+        "scenes": ordered,
+    })
+    temporary.replace(output / "summary.json")
+    return mean
 
 
 def main():
@@ -292,8 +309,23 @@ def main():
                        f"Training updates: {args.steps:,}. Scheduled refinement end: "
                        f"{min(refine_stop_iter, args.steps):,}.\n\n",
                        encoding="utf-8")
-    summaries = []
+    completed = {}
+    if not args.prepare_only:
+        for scene in scenes:
+            result = args.output / scene / "summary.json"
+            if not result.exists():
+                continue
+            summary = json.loads(result.read_text())
+            if (summary["scene"] != scene or summary["steps"] != args.steps
+                    or summary["heldout_views"] != len(splits[scene]["heldout"])
+                    or any(not math.isfinite(summary[key]) for key in METRICS)):
+                raise ValueError(f"Saved result does not match the benchmark run: {result}")
+            completed[scene] = summary
+        mean = write_progress(args.output, scenes, completed)
+        print(f"DL3DV progress: {len(completed)}/{len(scenes)} scenes evaluated", flush=True)
     for scene in scenes:
+        if scene in completed:
+            continue
         output = args.output / scene
         output.mkdir(exist_ok=True)
         prepared = output / "prepared"
@@ -303,10 +335,6 @@ def main():
         count = json.loads((prepared / "inputs.json").read_text())["seed_count"]
         if args.prepare_only:
             print(f"{scene}: prepared {count:,} initial Gaussians", flush=True)
-            continue
-        result = output / "summary.json"
-        if result.exists():
-            summaries.append(json.loads(result.read_text()))
             continue
         if metric is None:
             metric = LPIPS(net="vgg", version="0.1").eval()
@@ -318,17 +346,14 @@ def main():
                   growth_headroom_mib=args.growth_headroom_mib, refine_stop_iter=refine_stop_iter)
         summary = evaluate(output, args.steps, metric.cuda())
         metric.cpu()
-        summaries.append(summary)
+        completed[scene] = summary
+        mean = write_progress(args.output, scenes, completed)
         entry = (f"- {scene}: {summary['psnr_db']:.4f} dB, SSIM {summary['ssim']:.5f}, "
                  f"VGG LPIPS {summary['lpips_vgg']:.5f}, {summary['heldout_views']} held-out views.\n")
         with log.open("a", encoding="utf-8") as handle:
             handle.write(entry)
-        print(entry, flush=True)
-    if summaries:
-        mean = {key: float(np.mean([scene[key] for scene in summaries]))
-                for key in ("psnr_db", "ssim", "lpips_vgg")}
-        painter.save_json(args.output / "summary.json",
-                          {"scenes_evaluated": len(summaries), "macro_average": mean, "scenes": summaries})
+        print(f"[{len(completed)}/{len(scenes)}] {entry}", flush=True)
+    if completed:
         print(json.dumps(mean), flush=True)
 
 
