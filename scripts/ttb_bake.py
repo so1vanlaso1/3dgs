@@ -16,9 +16,9 @@ os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
 
+import av
 import numpy as np
 import torch
-import av
 from huggingface_hub import hf_hub_download
 from torch.nn import functional as F
 from torch.nn.attention import SDPBackend, sdpa_kernel
@@ -117,6 +117,14 @@ def sample_video(video, directory, max_views):
     return images
 
 
+def check_pose_memory(free):
+    if free < 4 * 2**30:
+        raise RuntimeError(
+            f"Only {free / 2**30:.2f} GiB of CUDA memory is free. "
+            "Pi3's FP32 parameters alone use about 3.6 GiB. Free GPU memory and retry."
+        )
+
+
 def estimate_scene(video, directory, max_views, long_edge, pose_size, pi3_path):
     from pi3.models.layers import attention
     from pi3.models.pi3 import Pi3
@@ -128,6 +136,7 @@ def estimate_scene(video, directory, max_views, long_edge, pose_size, pi3_path):
         raise ValueError(f"Decoded {len(images)} frame(s), but at least two views are required.")
     height, width = derive_target_hw(images[0], long_edge, 8)
     print(f"[pose] Estimating {len(images)} cameras. Bake resolution {width}x{height}.")
+    check_pose_memory(torch.cuda.mem_get_info()[0])
     pi3 = Pi3.from_pretrained(pi3_path).cuda().eval()
     dtype = torch.bfloat16 if torch.cuda.is_bf16_supported(including_emulation=False) else torch.float16
 
@@ -196,11 +205,7 @@ def main():
             f"- Full TTB checkpoint: `{DVSM_MODEL}` at `{DVSM_CHECKPOINT[1]}`\n"
             f"- Pi3 checkpoint revision: `{PI3_CHECKPOINT[1]}`\n"
         )
-    if free < 4 * 2**30:
-        raise RuntimeError(
-            f"Only {free / 2**30:.2f} GiB of CUDA memory is free. "
-            "Pi3's FP32 parameters alone use about 3.6 GiB. Free GPU memory and retry."
-        )
+    check_pose_memory(free)
 
     sys.path.insert(0, str(args.source))
     install_attention()
