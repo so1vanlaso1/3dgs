@@ -56,8 +56,16 @@ def render_state(params):
     )
 
 
+def load_posed(run):
+    rgb = np.load(run / "rgb.npy", mmap_mode="r")
+    size = (rgb.shape[2], rgb.shape[1])
+    with np.load(run / "cameras.npz") as archive:
+        split = dict(archive)
+    return size, CudaRgb(rgb, size), split, painter.tensor(split["views"]), painter.tensor(split["ks"])
+
+
 def train(run, out, count, steps=CHECKPOINTS[-1], *, quality=False, resume=False,
-          finish_refinement=False, growth_headroom_mib=768, rgb_long_edge=None):
+          finish_refinement=False, growth_headroom_mib=768, rgb_long_edge=None, posed_rgb=False):
     strategy = BudgetStrategy(
         cap_max=None, absgrad=True, grow_grad2d=.0008, refine_stop_iter=16000 if quality else 6000,
         reset_every=6000 if quality else 3000,
@@ -67,8 +75,14 @@ def train(run, out, count, steps=CHECKPOINTS[-1], *, quality=False, resume=False
     seed = 43 if quality else json.loads((baseline / "protocol.json").read_text())["seed"]
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
-    size, images, split, mesh = load_scan(run, load_mesh=not quality)
-    views, ks, _ = painter.camera_arrays(split, size)
+    if posed_rgb:
+        if not quality or rgb_long_edge is not None:
+            raise ValueError("Posed RGB requires quality mode and its prepared resolution")
+        size, images, split, views, ks = load_posed(run)
+        mesh = None
+    else:
+        size, images, split, mesh = load_scan(run, load_mesh=not quality)
+        views, ks, _ = painter.camera_arrays(split, size)
     if rgb_long_edge is not None and rgb_long_edge < max(size):
         resized = tuple(max(1, round(edge * rgb_long_edge / max(size))) for edge in size)
         ks[:, 0] *= resized[0] / size[0]
@@ -82,11 +96,20 @@ def train(run, out, count, steps=CHECKPOINTS[-1], *, quality=False, resume=False
         previous = json.loads((out / "protocol.json").read_text())
         if (previous["steps"] != steps or previous["initial_gaussians"] != count or not previous["quality_mode"]
                 or tuple(previous["rgb_size"]) != size
+                or previous.get("posed_rgb", False) != posed_rgb
                 or previous.get("growth_headroom_mib", 768) != growth_headroom_mib
                 or previous["source_sha256"][str(Path(__file__))] != painter.sha(Path(__file__))):
             raise ValueError("Resume settings or source differ from the quality run protocol")
     if quality:
         sequence = np.concatenate([rng.permutation(fit) for _ in range(math.ceil(steps / len(fit)))])[:steps]
+    if posed_rgb:
+        if not resume:
+            with np.load(run / "seeds.npz") as archive:
+                init = dict(archive)
+            if len(init["points"]) != count:
+                raise ValueError("Seed count differs from the requested Gaussian count")
+        spacing = tangent = normal = None
+    elif quality:
         if resume:
             area = previous["surface_area_m2"]
         else:
@@ -103,17 +126,21 @@ def train(run, out, count, steps=CHECKPOINTS[-1], *, quality=False, resume=False
         sequence = np.concatenate(epochs)[:steps]
         init = painter.initialize(mesh, count, rng)
         area = mesh.area
-    spacing = math.sqrt(area / count)
-    tangent = .65 * spacing
-    normal = min(.002, .15 * tangent)
+    if not posed_rgb:
+        spacing = math.sqrt(area / count)
+        tangent = .65 * spacing
+        normal = min(.002, .15 * tangent)
     centers = split["positions_m"][fit]
     scene_scale = 1.1 * np.linalg.norm(centers - centers.mean(axis=0), axis=1).max()
     if resume:
         params = torch.nn.ParameterDict({key: tensor.cuda() for key, tensor in saved["params"].items()})
     else:
-        scales = np.broadcast_to([tangent, tangent, normal], (count, 3)).copy()
-        if quality:
-            scales[:, :2] *= init["relative_spacing"].clip(.55, 1.2)[:, None]
+        if posed_rgb:
+            scales = init["scales"]
+        else:
+            scales = np.broadcast_to([tangent, tangent, normal], (count, 3)).copy()
+            if quality:
+                scales[:, :2] *= init["relative_spacing"].clip(.55, 1.2)[:, None]
         params = torch.nn.ParameterDict({
             "means": painter.tensor(init["points"]),
             "quats": painter.tensor(init["quats"]),
@@ -130,7 +157,7 @@ def train(run, out, count, steps=CHECKPOINTS[-1], *, quality=False, resume=False
     strategy.check_sanity(params, optimizers)
     strategy_state = strategy.initialize_state(float(scene_scale))
     checkpoints = out / "checkpoints"
-    checkpoints.mkdir(exist_ok=resume)
+    checkpoints.mkdir(exist_ok=resume or posed_rgb)
     milestones = QUALITY_CHECKPOINTS if quality else (*CHECKPOINTS, 10000, 15000)
     saves = tuple(step for step in milestones if step < steps) + (steps,)
     if not resume:
@@ -145,7 +172,10 @@ def train(run, out, count, steps=CHECKPOINTS[-1], *, quality=False, resume=False
         run / "dataset_audit/native_rgb_frames.json", run / "dataset_audit/preflight.json",
         out / "initialization.npz", out / "training_sequence.npy",
     ]
-    if quality:
+    if posed_rgb:
+        inputs = [run / name for name in ("rgb.npy", "cameras.npz", "seeds.npz", "inputs.json")]
+        inputs.extend((out / "initialization.npz", out / "training_sequence.npy"))
+    elif quality:
         if images.native.offsets is None:
             inputs.extend(run / path for path in (
                 "dataset_audit/native_rgb.bin", "dataset_audit/archive_sha256.json",
@@ -165,7 +195,9 @@ def train(run, out, count, steps=CHECKPOINTS[-1], *, quality=False, resume=False
                Path("scripts/iphone_rescan_alignment.py"), Path("gsplat/strategy/budget.py"),
                Path("gsplat/strategy/default.py"), Path("gsplat/strategy/ops.py"),
                Path("gsplat/rendering.py")]
-    if quality:
+    if posed_rgb:
+        sources.append(Path(__file__).with_name("run_dl3dv_a05.py"))
+    elif quality:
         sources.append(Path("scripts/stray_quality_bootstrap.py"))
     snapshot = out / "training_source"
     snapshot.mkdir(exist_ok=True)
@@ -186,7 +218,9 @@ def train(run, out, count, steps=CHECKPOINTS[-1], *, quality=False, resume=False
                                               "--format=csv,noheader"], text=True).strip(),
             "input_sha256": {str(path): painter.sha(path) for path in inputs},
             "source_sha256": {str(path): painter.sha(path) for path in sources},
-        } | ({"quality_mode": True, "surface_area_m2": area, "growth_headroom_mib": growth_headroom_mib,
+        } | ({"quality_mode": True, "posed_rgb": True, "growth_headroom_mib": growth_headroom_mib,
+              "sampling": "Triangulated from benchmark input RGB only"} if posed_rgb else
+             {"quality_mode": True, "surface_area_m2": area, "growth_headroom_mib": growth_headroom_mib,
               "sampling": "72% mesh surface area, 28% local mesh RGB contrast times area"} if quality else {}))
     losses = torch.empty(len(sequence), device="cuda")
     first_update, prior_elapsed = 0, 0.
