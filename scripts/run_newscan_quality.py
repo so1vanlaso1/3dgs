@@ -52,7 +52,7 @@ def write_results(log, model):
               "· [Full run output](run.log)\n")
 
 
-def run(archive, output, steps, initial_gaussians, prepared):
+def run(archive, output, steps, initial_gaussians, prepared, *, growth_headroom_mib=768):
     output.mkdir(parents=True, exist_ok=False)
     model = output / "model"
     model.mkdir()
@@ -62,15 +62,19 @@ def run(archive, output, steps, initial_gaussians, prepared):
             (output / "run.log").open("w", encoding="utf-8", buffering=1) as raw_log:
         log.write("# newscan A05-Abs quality run\n\n")
         log.write(f"Native 1920 × 1440 RGB. Target {steps:,} updates from {initial_gaussians:,} Gaussians. "
-                  "The LiDAR mesh initializes Gaussian centers. The RGB loss updates centers freely, "
-                  "and the CUDA headroom guard can stop densification early.\n")
+                  "The LiDAR mesh initializes Gaussian centers. The RGB loss updates centers freely.\n")
+        if growth_headroom_mib:
+            log.write(f"The CUDA headroom guard can stop densification early (minimum {growth_headroom_mib:,} MiB).\n")
+        else:
+            log.write("The CUDA memory headroom guard is disabled.\n")
         print(f"Progress log: {output / 'experiment_log.md'}", flush=True)
         if prepared is None:
             run_stage("Dataset preparation", "prepare_newscan.py", [archive, dataset], log, raw_log, start)
         else:
             log.write(f"\nReusing prepared data at `{prepared}`.\n")
         run_stage("Training", "iphone_rescan_a05.py",
-                  [dataset, model, "--quality", "--initial-gaussians", initial_gaussians, "--steps", steps],
+                  [dataset, model, "--quality", "--initial-gaussians", initial_gaussians, "--steps", steps,
+                   "--growth-headroom-mib", growth_headroom_mib],
                   log, raw_log, start)
         run_stage("Evaluation and PLY export", "stray_quality_evaluate.py",
                   [dataset, dataset / "raw/e1cfcfffe4", model], log, raw_log, start)
@@ -83,9 +87,13 @@ if __name__ == "__main__":
     parser.add_argument("output", type=Path, help="New directory for the run")
     parser.add_argument("--steps", type=int, default=48_000)
     parser.add_argument("--initial-gaussians", type=int, default=1_500_000)
+    parser.add_argument("--growth-headroom-mib", type=int, default=768,
+                        help="Minimum CUDA memory reserve for refinement, or 0 to disable the guard")
     parser.add_argument("--prepared", type=Path, help="Reuse a dataset previously built by prepare_newscan.py")
     args = parser.parse_args()
     if args.steps < 2 or args.initial_gaussians < 1:
         parser.error("Provide at least 2 updates and a positive Gaussian count")
+    if args.growth_headroom_mib < 0:
+        parser.error("--growth-headroom-mib must be nonnegative")
     run(args.archive.resolve(), args.output.resolve(), args.steps, args.initial_gaussians,
-        args.prepared.resolve() if args.prepared else None)
+        args.prepared.resolve() if args.prepared else None, growth_headroom_mib=args.growth_headroom_mib)
