@@ -3456,3 +3456,5 @@ Verified 17 paths matched ignore rules and nine remained eligible with `git chec
 ### Repair of the rejected GitHub push
 
 GitHub rejected `56ba58c5` because `9138b80cc3.zip` exceeded its file size limit. `git ls-remote` confirmed the remote `new` branch still pointed to the local commit's parent, `78220d4e`. Removed both capture ZIPs from the index with `git rm --cached` and verified their local sizes and SHA-256 hashes against the values measured before removal. Folded the ignore rule and this record into the replacement for the single unpublished commit, preserving the source and research changes. The replacement uses the existing remote tip as its parent so the branch can be pushed normally.
+
+Verified that the outgoing objects contained neither capture ZIP and that every outgoing blob was within the file size limit. GitHub accepted `1fec3aaf` as a fast-forward update to `new`. A fresh remote-ref check confirmed the published commit, and a Git object audit found neither ZIP in its reachable history.
