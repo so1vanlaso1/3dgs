@@ -248,9 +248,13 @@ def main():
     parser.add_argument("--video-pts", type=Path, required=True)
     parser.add_argument("--frame-split", type=Path, help="Predeclared fit, withheld and heldout frame IDs")
     parser.add_argument("--only-10mm", action="store_true")
+    parser.add_argument("--close-range", action="store_true",
+                        help="Use a 5 mm TSDF and admit high-confidence depth from 100 mm")
     parser.add_argument("--rgb-frame-counter", action="store_true",
                         help="Validate RGB PTS against the exporter's 60 Hz frame counter")
     args = parser.parse_args()
+    if args.close_range and args.only_10mm:
+        parser.error("--close-range and --only-10mm are mutually exclusive")
     source, output = args.source, args.output
     output.mkdir(parents=True, exist_ok=True)
     cv2.setNumThreads(2)
@@ -314,8 +318,10 @@ def main():
     np.savez_compressed(output / "camera_split.npz", fit=fit, withheld=ids[withheld], heldout=heldout,
                         timestamps_s=timestamps, positions_m=xyz, camera_to_world_rotation=orientation,
                         intrinsics_depth_px=intrinsics)
-    setups = {"tsdf_10mm": (.01, .04)}
-    if not args.only_10mm:
+    min_depth_mm = 100 if args.close_range else 250
+    primary = "tsdf_5mm" if args.close_range else "tsdf_10mm"
+    setups = {primary: (.005, .02) if args.close_range else (.01, .04)}
+    if not args.only_10mm and not args.close_range:
         setups["tsdf_20mm"] = (.02, .08)
     f32 = o3d.core.Dtype.Float32
     volumes = {
@@ -328,6 +334,7 @@ def main():
     voxel_bins, colors, depths, masks, directions = {}, {}, {}, {}, {}
     confidence_counts = np.zeros(3, dtype=np.int64)
     accepted_counts = {}
+    skipped_tsdf_frames = []
     frame_bytes = width * height * 3
     decoder = subprocess.Popen([
         "ffmpeg", "-v", "error", "-ignore_editlist", "1", "-noautorotate",
@@ -349,7 +356,7 @@ def main():
         if index not in selected:
             continue
         color = np.frombuffer(image, dtype=np.uint8).reshape(height, width, 3)
-        valid = (depth >= 250) & (depth <= 5000) & (confidence == 2)
+        valid = (depth >= min_depth_mm) & (depth <= 5000) & (confidence == 2)
         accepted_counts[int(index)] = int(valid.sum())
         fx, fy, cx, cy = intrinsics[index]
         direction = np.stack(((u - cx) / fx, (v - cy) / fy, np.ones_like(u)), axis=-1)
@@ -363,7 +370,12 @@ def main():
         world_to_camera[:3, :3] = orientation[index].T
         world_to_camera[:3, 3] = -orientation[index].T @ xyz[index]
         extrinsic = o3d.core.Tensor(world_to_camera)
-        for name, volume in volumes.items():
+        # Open3D's CPU block discovery samples depth on a four-pixel grid.
+        # Sparse frames with no valid samples on that grid can still contribute to the point cloud.
+        has_tsdf_samples = valid[::4, ::4].any()
+        if not has_tsdf_samples:
+            skipped_tsdf_frames.append(int(index))
+        for name, volume in (volumes.items() if has_tsdf_samples else ()):
             voxel, truncation = setups[name]
             margin = truncation / voxel
             coords = volume.compute_unique_block_coordinates(depth_image, K, extrinsic, 1., 5.001, margin)
@@ -414,7 +426,9 @@ def main():
         "confidence_counts": confidence_counts.tolist(), "fit_frames": len(fit),
         "heldout_gap_frames": int(withheld.sum()), "heldout_frames": len(heldout),
         "min_gap_from_fit_s": float(np.abs(times[heldout, None] - times[fit]).min()),
+        "minimum_depth_mm": min_depth_mm,
         "valid_fit_pixels_per_frame": percentiles([accepted_counts[i] for i in fit]),
+        "fit_frames_skipped_for_tsdf": skipped_tsdf_frames,
         "point_cloud": {"points": len(cloud.points), "voxel_m": .01,
                         "point_observations": int(fused[:, 6].sum()),
                         "single_observation_voxels": int((fused[:, 6] == 1).sum()),
@@ -441,7 +455,7 @@ def main():
             writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
             writer.writeheader()
             writer.writerows(rows)
-        if name == "tsdf_10mm":
+        if name == primary:
             make_previews(output, mesh, cloud, xyz, heldout, depths, masks, colors, previews, times)
     (output / "metrics.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print("Reconstruction complete", flush=True)

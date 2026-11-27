@@ -142,11 +142,9 @@ compile_commands.json
 /results/
 /stage_result/*/data/
 
-# Local capture archives kept at the repository root. Keep curated archives
-# and fixtures elsewhere eligible for version control.
-/710d9d02a3.zip
-/mo.zip
-/newscan.zip
+# The repository root is used for local capture ZIPs. Curated archives and
+# fixtures belong in their report, asset, or test directories.
+/*.zip
 
 # Local report template.
 /Mau bao cao mon TNVL 1.docx

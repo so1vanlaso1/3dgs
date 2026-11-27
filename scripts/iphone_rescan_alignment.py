@@ -104,7 +104,8 @@ def check(run, source, examples):
             "anchor_frames": checked,
             "track_count": sum(len(x) for x in residuals[0]),
             "median_flow_error_px": {
-                str(lag): float(np.median(np.concatenate(values))) for lag, values in residuals.items()
+                str(lag): float(np.median(np.concatenate(values))) if values else None
+                for lag, values in residuals.items()
             },
         })
     alignment = out / "rgb_depth_alignment"

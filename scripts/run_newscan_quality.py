@@ -1,6 +1,7 @@
 """Prepare, train, score, and export a native-resolution newscan reconstruction."""
 
 import argparse
+from importlib.util import find_spec
 import json
 from pathlib import Path
 import subprocess
@@ -53,6 +54,8 @@ def write_results(log, model):
 
 
 def run(archive, output, steps, initial_gaussians, prepared, *, growth_headroom_mib=768):
+    if find_spec("plyfile") is None:
+        raise SystemExit("PLY verification requires plyfile. Install it with python -m pip install plyfile")
     output.mkdir(parents=True, exist_ok=False)
     model = output / "model"
     model.mkdir()
